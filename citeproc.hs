@@ -14,12 +14,30 @@ import System.IO
 import Data.Maybe (fromMaybe)
 import Data.List (intersperse)
 
+-- represents the citeproc-js citation data object 
+data CitationData = CitationData { citationItems :: Citations
+                                   -- TODO: data structure for properties
+                                 , properties :: [String]
+                                 }
+  
+instance JSON CitationData where
+  -- showJSON = toJSON -- TODO: re-encode using citationItems, etc.
+  readJSON (JSObject o) = case get_field o "citationItems" of
+    Just (JSArray cs) ->
+      Ok $ CitationData { citationItems = [cites]
+                        , properties = [] -- TODO
+                        }
+        where cites = reverse $ foldl getCites [] cs
+              getCites acc obj = case readJSON obj of
+                Ok c@(Cite _ _ _ _ _ _ _ _ _ _ _) -> c:acc 
+                _ -> acc -- TODO: error if non-citation in citationItems?
+    _ -> Error "Not a citations data cluster"
+
 instance JSON Cite where
   showJSON = toJSON
-  readJSON (JSObject o) =
-        Ok $ emptyCite{ citeId = case get_field o "id" of
-                                       Just (JSString x) -> fromJSString x
-                                       _  -> error $ "Missing id field"
+  readJSON (JSObject o) = case get_field o "id" of
+    Just (JSString x) ->
+        Ok $ emptyCite{ citeId = fromJSString x
                       , citePrefix = case get_field o "prefix" of
                                        Just (JSString x) -> PlainText $ fromJSString x
                                        _ -> PandocText []
@@ -48,37 +66,11 @@ instance JSON Cite where
                       --                  Just (JSBool True) -> True
                       --                  _ -> False
                       }
+    _ -> Error "Not a citation item"
   readJSON x = fromJSON x
 
 jsString :: String -> JSValue
 jsString = JSString . toJSString
-
--- instance JSON Inline where
---   showJSON (Str s) = jsString s
---   showJSON Space   = jsString " "
---   showJSON (Emph ils) | xs <- showJSON ils = JSArray [jsString "EMPH", xs]
---   showJSON (Strong ils) | xs <- showJSON ils = JSArray [jsString "STRONG", xs]
---   showJSON (Superscript ils) | xs <- showJSON ils = JSArray [jsString "SUPERSCRIPT", xs]
---   showJSON (Subscript ils) | xs <- showJSON ils = JSArray [jsString "SUBSCRIPT", xs]
---   showJSON (SmallCaps ils) | xs <- showJSON ils = JSArray [jsString "SMALLCAPS", xs]
---   showJSON (Strikeout ils) | xs <- showJSON ils = JSArray [jsString "STRIKEOUT", xs]
---   -- showJSON (EmDash) = jsString "—"
---   -- showJSON (EnDash) = jsString "–"
---   -- showJSON (Ellipses) = jsString "…"
---   showJSON (Note [Plain ils]) | xs <- showJSON ils = JSArray [jsString "NOTE", xs]
---   showJSON x = error ("Need showJSON instance for: " ++ show x)
---   readJSON (JSArray (JSString ty : xs)) =
---     case fromJSString ty of
---       "EMPH"        | Ok ys <- mapM readJSON xs -> Ok $ Emph ys
---       "STRONG"      | Ok ys <- mapM readJSON xs -> Ok $ Strong ys
---       "SUPERSCRIPT" | Ok ys <- mapM readJSON xs -> Ok $ Subscript ys
---       "SUBSCRIPT"   | Ok ys <- mapM readJSON xs -> Ok $ Subscript ys
---       "SMALLCAPS"   | Ok ys <- mapM readJSON xs -> Ok $ SmallCaps ys
---       "STRIKEOUT"   | Ok ys <- mapM readJSON xs -> Ok $ Strikeout ys
---       _ -> error "unknown case"
---   readJSON (JSString s) | fromJSString s == " " = Ok Space
---   readJSON (JSString x) = Ok $ Str $ fromJSString x
---   readJSON x = error $ "Need readJSON instance for: " ++ show x
 
 data CiteprocResult = CiteprocResult { cites  :: [String]
                                      , bib    :: [String]
@@ -96,32 +88,6 @@ instance Show CiteprocResult where
             ["\n=====\n"] ++
             intersperse "\n" (bib cr) ++
             ["\n"]
-
--- normalize :: [Inline] -> [Inline]
--- normalize = topDown consolidateInlines
-
--- consolidateInlines :: [Inline] -> [Inline]
--- consolidateInlines (Str x : Str y : zs) = consolidateInlines (Str (x ++ y) : zs)
--- consolidateInlines (Str x : Space : zs) = consolidateInlines (Str (x ++ " ") : zs)
--- consolidateInlines (x : xs) = x : consolidateInlines xs
--- consolidateInlines [] = []
-
--- seems like [Cite] is a parameter here JUST for the sake of producing Pandoc JSON
--- If we don't care about producing a node to insert into a document, 
--- can probably simplify renderers to: 
--- [FormattedOutput] -> String
--- formatCitationPandoc :: Style -> [Cite] -> [FormattedOutput] -> [Inline]
--- formatCitationPandoc sty (c:cs) (x:xs) = normalize inlines
---   where inlines = if (authorInText c) && not (null xs)
---                      then renderPandoc sty [x] ++
---                           if noteCitation
---                              then [Note [Plain $ renderPandoc sty xs]]
---                              else [Space] ++ renderPandoc sty xs
---                      else if noteCitation
---                              then [Note [Plain $ renderPandoc sty (x:xs)]]
---                              else renderPandoc sty (x:xs)
---         noteCitation = styleClass sty == "note"
--- formatCitationPandoc _ _ _ = error "formatCitationPandoc: empty citation list"
 
 
 -- rendering functions:
@@ -181,9 +147,9 @@ cssProp name val = if null val then ""
 -- TODO:
 -- 1. formatting functions for Plain, HTML, and ODT
 --    fix spacing issues!
--- 4. use citeproc-js-compatible JSON:
---    at the moment, citation objects must be passed as an array of arrays; need
---    to instance readJSON for the higher-level citeproc-js objects
+-- 4. use citeproc-js-compatible JSON: input should be an array of objects with
+--    citationItems properties (each such object represents *one* citation,
+--    possibly containing multiple references)
 
 data OutputFormat = Ascii | Html   -- | Odt ...
 
@@ -209,10 +175,10 @@ main = do
   refs <- concat `fmap` mapM readBiblioFile bibfiles
   res <- decode `fmap` getContents
   -- hPutStrLn stderr $ show res
-  let Ok cites' = res
+  let Ok citesData = res
   -- for debugging:
   -- hPutStrLn stderr $ show cites'
-  let bibdata = citeproc procOpts sty refs cites'
+  let bibdata = citeproc procOpts sty refs (citationItems citesData)
   let renderer = chooseRenderer $ chooseOutputFormat backend
   -- hPutStrLn stderr $ show bibdata
   let citeprocres = CiteprocResult {
