@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables, PatternGuards #-}
 import Text.CSL
 import Text.CSL.Style
+import Text.CSL.Output.Plain ((<>))
 import System.Environment
 import Text.JSON
 import Text.JSON.Generic
@@ -95,20 +96,24 @@ instance Show CiteprocResult where
 wrap :: String -> String -> String -> String
 wrap openTag closeTag s = openTag ++ s ++ closeTag 
 
+trim :: String -> String 
+trim = unwords . words
+
 -- plain text: use citeproc-hs' renderPlain
 
 -- HTML: 
 renderHTML :: [FormattedOutput] -> String
-renderHTML ((FO fmt embedded):fos) = wrapHTMLStyle s fmt ++ renderHTML fos
-  where s = renderHTML embedded 
-renderHTML ((FN n fmt):fos) = wrapHTMLStyle n fmt ++ renderHTML fos	
-renderHTML ((FS s fmt):fos) = wrapHTMLStyle s fmt ++ renderHTML fos	
-renderHTML ((FDel s):fos) = s ++ renderHTML fos
-renderHTML ((FUrl target@(url, title) fmt):fos) = wrapHTMLStyle link fmt ++ renderHTML fos
-  where link = wrap ("<a href=\"" ++ url ++ "\">") "</a>" title
-renderHTML ((FPan inlines):fos) = "(renderHTML undefined for FPan)" --undefined 
-renderHTML ((FNull):fos) = renderHTML fos
-renderHTML [] = ""
+renderHTML = concatMap htmlify
+
+htmlify :: FormattedOutput -> String
+htmlify fo = case fo of
+  (FO fmt xs) -> wrapHTMLStyle (trim $ renderHTML xs) fmt 
+  (FN n fmt) -> wrapHTMLStyle n fmt 
+  (FS s fmt) -> wrapHTMLStyle s fmt
+  (FDel s) -> s 
+  (FUrl target@(url, title) fmt) -> wrapHTMLStyle link fmt
+    where link = wrap ("<a href=\"" ++ url ++ "\">") "</a>" title
+  otherwise -> ""
 
 wrapHTMLStyle :: String -> Formatting -> String
 wrapHTMLStyle s fmt = s'
@@ -122,19 +127,20 @@ wrapHTMLStyle s fmt = s'
                else cssProp "text-decoration" (textDecoration fmt)
         valn = cssProp "vertical-align" (verticalAlign fmt)
         tcs = if (noCase fmt) then ""
+                                   -- TODO: capitalize-first is not a valid
+                                   -- CSS text-transform value
               else cssProp "text-transform" (textCase fmt)
         dsp = cssProp "display" (display fmt)
         props = concat $ filter (not . null) [ffam, fsty, fvt, fwt, tdec,
                                               valn, tcs, dsp]
         spanOpen = if null props then ""
-                   else "<span style=\"" ++ props ++ "\">"
+                   else "<span style=\"" ++ (trim props) ++ "\">"
         spanClose = if null props then ""
                     else "</span>"
-        -- TODO: quotes? stripPeriods?
-        -- quotes :: Quote
-        -- stripPeriods :: Bool
-        -- TODO: check that all values are suitable for CSS...
-        s' = pfx ++ " " ++ wrap spanOpen spanClose s ++ sfx
+        quoted s = if null s || quotes fmt == NoQuote then s
+                   else wrap "\"" "\"" s
+        -- TODO: stripPeriods :: Bool
+        s' = pfx <> wrap spanOpen spanClose (quoted s) <> sfx
                 
 cssProp :: String -> String -> String
 cssProp name val = if null val then ""
