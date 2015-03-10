@@ -44,12 +44,12 @@ instance JSON Cite where
                       , citeSuffix = case get_field o "suffix" of
                                        Just (JSString x) -> PlainText $ fromJSString x
                                        _ -> PandocText []
-                      -- , citeLabel = case get_field o "label" of
-                      --                  Just (JSString x) -> fromJSString x
-                      --                  _ -> ""
-                      -- , citeLocator = case get_field o "locator" of
-                      --                  Just (JSString x) -> fromJSString x
-                      --                  _ -> ""
+                      , citeLabel = case get_field o "label" of
+                                       Just (JSString x) -> fromJSString x
+                                       _ -> ""
+                      , citeLocator = case get_field o "locator" of
+                                       Just (JSString x) -> fromJSString x
+                                       _ -> ""
                       -- , citeNoteNumber = case get_field o "note_number" of
                       --                  Just (JSString x) -> fromJSString x
                       --                  _ -> ""
