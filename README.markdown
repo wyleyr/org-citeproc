@@ -23,7 +23,7 @@ major changes are:
 
 - The bibliography file can be in any of the formats that bibutils
   supports.
-- The format can be `ascii' or `html'.
+- The format can be `ascii` or `html`.
 - The program reads JSON from stdin and writes formatted data to stdout.
 
 ## Input
