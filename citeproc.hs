@@ -74,9 +74,9 @@ instance JSON Cite where
                       , suppressAuthor = case get_field o "suppress-author" of
                                        Just (JSBool True) -> True
                                        _ -> False
-                      -- , authorInText = case get_field o "author_in_text" of
-                      --                  Just (JSBool True) -> True
-                      --                  _ -> False
+                      , authorInText = case get_field o "author-in-text" of
+                                       Just (JSBool True) -> True
+                                       _ -> False
                       }
     _ -> Error "Not a citation item"
   readJSON x = fromJSON x
