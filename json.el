@@ -1,3 +1,7 @@
+;;;;
+;;;; json.el: translate Org citations to JSON
+;;;; 
+
 ;; Helper; shouldn't Elisp have this already??
 (defun map-plist (f plist)
   "Map F over the key-value pairs in PLIST.  F is called with
