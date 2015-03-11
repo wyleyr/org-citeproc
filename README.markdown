@@ -28,8 +28,8 @@ major changes are:
 
 ## Input
 
-The input is a JSON array of citations.
-A citation is a JSON array of cites.
+The input is a JSON citation data object.
+A citation data object contains a JSON array of cites.
 A cite is a JSON object describing one source.  Fields can include:
 
 - `id` (string)
