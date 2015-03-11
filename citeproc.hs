@@ -15,7 +15,17 @@ import System.IO
 import Data.Maybe (fromMaybe)
 import Data.List (intersperse)
 
--- represents the citeproc-js citation data object 
+--
+-- INPUT PROCESSING
+-- 
+
+-- TODO:
+-- 4. use citeproc-js-compatible JSON: input should be an array of objects with
+--    citationItems properties (each such object represents *one* citation,
+--    possibly containing multiple references)
+
+ 
+-- represents the citeproc-js citation data JSON object 
 data CitationData = CitationData { citationItems :: Citations
                                    -- TODO: data structure for properties
                                  , properties :: [String]
@@ -34,6 +44,7 @@ instance JSON CitationData where
                 _ -> acc -- TODO: error if non-citation in citationItems?
     _ -> Error "Not a citations data cluster"
 
+-- JSON reader for citeproc-hs' Cite type
 instance JSON Cite where
   showJSON = toJSON
   readJSON (JSObject o) = case get_field o "id" of
@@ -73,17 +84,31 @@ instance JSON Cite where
 jsString :: String -> JSValue
 jsString = JSString . toJSString
 
+--
+-- OUTPUT PROCESSING
+-- 
+
+-- output format selection
+data OutputFormat = Ascii | Html   -- | Odt ...
+
+type Renderer = [FormattedOutput] -> String
+
+chooseRenderers :: OutputFormat -> (Renderer, Renderer)
+chooseRenderers Ascii = (renderPlain, renderPlain)
+chooseRenderers Html = (renderCiteHTML, renderBibEntryHTML) 
+
+chooseOutputFormat :: String -> OutputFormat
+chooseOutputFormat s
+  | s == "ascii" = Ascii
+  | s == "html" = Html
+  | otherwise = error $ "Unknown output format: " ++ s
+ 
+-- represents result of citeproc-hs processing
 data CiteprocResult = CiteprocResult { cites  :: [String]
                                      , bib    :: [String]
                                      } deriving (Typeable, Data)
 
--- instance JSON CiteprocResult where
---   showJSON res = JSObject $
---                  toJSObject [("citations", showJSON $ cites res)
---                             ,("bibliography", showJSON $ bib res)
---                             ]
---   readJSON = fromJSON
-                                                
+                                               
 instance Show CiteprocResult where                                                
   show cr = concat $ intersperse "\n" (cites cr) ++
             ["\n=====\n"] ++
@@ -102,6 +127,16 @@ trim = unwords . words
 -- plain text: use citeproc-hs' renderPlain
 
 -- HTML: 
+renderCiteHTML :: [FormattedOutput] -> String
+renderCiteHTML = (wrap spanOpen spanClose) . renderHTML
+  where spanOpen = "<span class=\"citation\">"
+        spanClose = "</span>"
+
+renderBibEntryHTML :: [FormattedOutput] -> String
+renderBibEntryHTML = (wrap pOpen pClose) . renderHTML
+  where pOpen = "<p class=\"bibliography-entry\">"
+        pClose = "</p>"
+  
 renderHTML :: [FormattedOutput] -> String
 renderHTML = concatMap htmlify
 
@@ -137,38 +172,19 @@ wrapHTMLStyle s fmt = s'
                    else "<span style=\"" ++ (trim props) ++ "\">"
         spanClose = if null props then ""
                     else "</span>"
+        cssProp name val = if null val then ""
+                           else name ++ ": " ++ val ++ "; "
         quoted s = if null s || quotes fmt == NoQuote then s
                    else wrap "\"" "\"" s
         -- TODO: stripPeriods :: Bool
         s' = pfx <> wrap spanOpen spanClose (quoted s) <> sfx
                 
-cssProp :: String -> String -> String
-cssProp name val = if null val then ""
-                   else name ++ ": " ++ val ++ "; "
-
-
 -- ODT: TODO                
 
-
--- TODO:
--- 1. formatting functions for Plain, HTML, and ODT
---    fix spacing issues!
--- 4. use citeproc-js-compatible JSON: input should be an array of objects with
---    citationItems properties (each such object represents *one* citation,
---    possibly containing multiple references)
-
-data OutputFormat = Ascii | Html   -- | Odt ...
-
-chooseRenderer :: OutputFormat -> [FormattedOutput] -> String
-chooseRenderer Ascii = renderPlain
-chooseRenderer Html = renderHTML
-
-chooseOutputFormat :: String -> OutputFormat
-chooseOutputFormat s
-  | s == "ascii" = Ascii
-  | s == "html" = Html
-  | otherwise = error $ "Unknown output format: " ++ s
-  
+ 
+--
+-- MAIN
+-- 
 main :: IO ()
 main = do
   args <- getArgs
@@ -185,10 +201,10 @@ main = do
   -- for debugging:
   -- hPutStrLn stderr $ show cites'
   let bibdata = citeproc procOpts sty refs (citationItems citesData)
-  let renderer = chooseRenderer $ chooseOutputFormat backend
+  let (crenderer, brenderer) = chooseRenderers $ chooseOutputFormat backend
   -- hPutStrLn stderr $ show bibdata
   let citeprocres = CiteprocResult {
-                          cites = map renderer (citations bibdata)
-                        , bib   = map renderer (bibliography bibdata)
+                          cites = map crenderer (citations bibdata)
+                        , bib   = map brenderer (bibliography bibdata)
                         }
   putStrLn $ show citeprocres
