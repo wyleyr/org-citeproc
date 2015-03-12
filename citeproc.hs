@@ -19,14 +19,19 @@ import Data.List (intersperse)
 -- INPUT PROCESSING
 -- 
 
--- TODO:
--- 4. use citeproc-js-compatible JSON: input should be an array of objects with
---    citationItems properties (each such object represents *one* citation,
---    possibly containing multiple references)
+-- represents arrays of citeproc-js citation data JSON objects
+data CitationsData = CitationsData [CitationData]
 
+instance JSON CitationsData where
+  -- showJSON = toJSON -- TODO: re-encode as array
+  readJSON (JSArray cds) = Ok $ CitationsData citations
+    where citations = reverse $ foldl getCitations [] cds
+          getCitations acc obj = case readJSON obj of
+                Ok cd@(CitationData _ _) -> cd:acc 
+                _ -> acc -- TODO: error if non-citation in the array?
  
 -- represents the citeproc-js citation data JSON object 
-data CitationData = CitationData { citationItems :: Citations
+data CitationData = CitationData { citationItems :: [Cite]
                                    -- TODO: data structure for properties
                                  , properties :: [String]
                                  }
@@ -35,7 +40,7 @@ instance JSON CitationData where
   -- showJSON = toJSON -- TODO: re-encode using citationItems, etc.
   readJSON (JSObject o) = case get_field o "citationItems" of
     Just (JSArray cs) ->
-      Ok $ CitationData { citationItems = [cites]
+      Ok $ CitationData { citationItems = cites
                         , properties = [] -- TODO
                         }
         where cites = reverse $ foldl getCites [] cs
@@ -197,10 +202,10 @@ main = do
   refs <- concat `fmap` mapM readBiblioFile bibfiles
   res <- decode `fmap` getContents
   -- hPutStrLn stderr $ show res
-  let Ok citesData = res
+  let Ok (CitationsData inputCitations) = res
   -- for debugging:
   -- hPutStrLn stderr $ show cites'
-  let bibdata = citeproc procOpts sty refs (citationItems citesData)
+  let bibdata = citeproc procOpts sty refs $ map citationItems inputCitations
   let (crenderer, brenderer) = chooseRenderers $ chooseOutputFormat backend
   -- hPutStrLn stderr $ show bibdata
   let citeprocres = CiteprocResult {

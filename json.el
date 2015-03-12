@@ -12,9 +12,15 @@ arguments, respectively."
           (v (cadr plist)))
         (cons (funcall f k v) (map-plist f (cddr plist))))))
 
+(defun org-citations-to-json (citations)
+  "Translate a list of Org citation objects to a JSON array that can
+be read by citeproc-js"
+  (if (null citations) ""
+    (format "[ %s ]" (mapconcat 'org-citation-to-json citations ", "))))
+
 (defun org-citation-to-json (citation)
-  "Translate an Org citation object to JSON data that can be read
-by citeproc-js or citeproc-hs"
+  "Translate an Org citation object to a JSON citation data
+object that can be read by citeproc-js"
   (let* ((parenp (org-element-property :parenthetical citation))
 	 (references
 	  ; TODO: is this the right way to get the list of references
@@ -32,7 +38,7 @@ by citeproc-js or citeproc-hs"
 
 (defun org-citation-reference-to-json (reference)
   "Translate a citation-reference within an Org citation object
-to JSON data that can be read by citeproc-js or citeproc-hs"
+to JSON data that can be read by citeproc-js"
   (let* ((parenp (org-element-property :parenthetical
 				       (org-element-property :parent reference)))
 	 (json-props (map-plist 'org-citation--reference-property-to-json
