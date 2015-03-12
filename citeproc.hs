@@ -6,7 +6,9 @@ import System.Environment
 import Text.JSON
 import Text.JSON.Generic
 import Text.JSON.Types (get_field)
---import Text.Pandoc.Definition
+import Text.Pandoc.Definition (Pandoc(Pandoc), nullMeta, Block(Plain), Inline)
+import Text.Pandoc.Writers.HTML
+import Text.Pandoc.Options
 --import Text.Pandoc.Generic
 import qualified Data.Map as M
 import Control.Monad (unless)
@@ -98,9 +100,10 @@ data OutputFormat = Ascii | Html   -- | Odt ...
 
 type Renderer = [FormattedOutput] -> String
 
-chooseRenderers :: OutputFormat -> (Renderer, Renderer)
-chooseRenderers Ascii = (renderPlain, renderPlain)
-chooseRenderers Html = (renderCiteHTML, renderBibEntryHTML) 
+chooseRenderers :: Style -> OutputFormat -> (Renderer, Renderer)
+chooseRenderers sty Ascii = (renderPlain, renderPlain)
+chooseRenderers sty Html = (renderPandocHTML . renderPandoc sty,
+                            renderPandocHTML . renderPandoc sty) 
 
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
@@ -144,6 +147,15 @@ renderBibEntryHTML = (wrap pOpen pClose) . renderHTML
   
 renderHTML :: [FormattedOutput] -> String
 renderHTML = concatMap htmlify
+
+renderPandocHTML :: [Inline] -> String
+renderPandocHTML inlines = writeHtmlString opts doc 
+  where opts = WriterOptions { writerStandalone = False
+                             , writerTableOfContents = False
+                             , writerCiteMethod = Citeproc
+                             , writerSlideVariant = NoSlides
+                             }
+        doc = Pandoc nullMeta $ [Plain inlines]
 
 htmlify :: FormattedOutput -> String
 htmlify fo = case fo of
@@ -206,7 +218,7 @@ main = do
   -- for debugging:
   -- hPutStrLn stderr $ show cites'
   let bibdata = citeproc procOpts sty refs $ map citationItems inputCitations
-  let (crenderer, brenderer) = chooseRenderers $ chooseOutputFormat backend
+  let (crenderer, brenderer) = chooseRenderers sty $ chooseOutputFormat backend
   -- hPutStrLn stderr $ show bibdata
   let citeprocres = CiteprocResult {
                           cites = map crenderer (citations bibdata)
