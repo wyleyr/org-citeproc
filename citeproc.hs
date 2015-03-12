@@ -6,7 +6,7 @@ import System.Environment
 import Text.JSON
 import Text.JSON.Generic
 import Text.JSON.Types (get_field)
-import Text.Pandoc.Definition (Pandoc(Pandoc), nullMeta, Block(Plain), Inline)
+import Text.Pandoc.Definition hiding (Cite)
 import Text.Pandoc.Writers.HTML
 import Text.Pandoc.Options
 --import Text.Pandoc.Generic
@@ -102,8 +102,8 @@ type Renderer = [FormattedOutput] -> String
 
 chooseRenderers :: Style -> OutputFormat -> (Renderer, Renderer)
 chooseRenderers sty Ascii = (renderPlain, renderPlain)
-chooseRenderers sty Html = (renderPandocHTML . renderPandoc sty,
-                            renderPandocHTML . renderPandoc sty) 
+chooseRenderers sty Html = (renderPandocHTML . renderCite . renderPandoc sty,
+                            renderPandocHTML . renderBibEntry . renderPandoc sty) 
 
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
@@ -135,18 +135,16 @@ trim = unwords . words
 -- plain text: use citeproc-hs' renderPlain
 
 -- HTML: 
-renderCiteHTML :: [FormattedOutput] -> String
-renderCiteHTML = (wrap spanOpen spanClose) . renderHTML
-  where spanOpen = "<span class=\"citation\">"
-        spanClose = "</span>"
+renderItem :: Attr -> [Inline] -> [Inline]
+renderItem attr inlines = [Span attr inlines]
 
-renderBibEntryHTML :: [FormattedOutput] -> String
-renderBibEntryHTML = (wrap pOpen pClose) . renderHTML
-  where pOpen = "<p class=\"bibliography-entry\">"
-        pClose = "</p>"
-  
-renderHTML :: [FormattedOutput] -> String
-renderHTML = concatMap htmlify
+renderCite :: [Inline] -> [Inline]
+renderCite = renderItem citeAttr
+  where citeAttr = ("", ["citation"], []) -- no id, citation class, no other attrs
+
+renderBibEntry :: [Inline] -> [Inline]
+renderBibEntry = renderItem bibEntryAttr
+  where bibEntryAttr = ("", ["bibliography-entry"], []) 
 
 renderPandocHTML :: [Inline] -> String
 renderPandocHTML inlines = writeHtmlString opts doc 
@@ -156,6 +154,9 @@ renderPandocHTML inlines = writeHtmlString opts doc
                              , writerSlideVariant = NoSlides
                              }
         doc = Pandoc nullMeta $ [Plain inlines]
+
+renderHTML :: [FormattedOutput] -> String
+renderHTML = concatMap htmlify
 
 htmlify :: FormattedOutput -> String
 htmlify fo = case fo of
