@@ -19,4 +19,4 @@ Cabal-version:       >=1.2
 
 Executable citeproc
   Main-is:          citeproc.hs
-  Build-depends:    base, containers, json, citeproc-hs, pandoc-types
+  Build-depends:    base, containers, json, citeproc-hs, pandoc-types, pandoc
