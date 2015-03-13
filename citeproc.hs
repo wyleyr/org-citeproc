@@ -7,11 +7,13 @@ import Text.JSON
 import Text.JSON.Generic
 import Text.JSON.Types (get_field)
 import Text.Pandoc.Definition hiding (Cite)
+import Text.Pandoc.Writers.Markdown
 import Text.Pandoc.Writers.HTML
 import Text.Pandoc.Writers.OpenDocument
 import Text.Pandoc.Options
 --import Text.Pandoc.Generic
 import qualified Data.Map as M
+import Data.Set (empty)
 import Control.Monad (unless)
 import System.Exit
 import System.IO
@@ -102,11 +104,15 @@ data OutputFormat = Ascii | Html | OpenDocument -- ...
 type Renderer = [FormattedOutput] -> String
 
 chooseRenderers :: Style -> OutputFormat -> (Renderer, Renderer)
-chooseRenderers sty Ascii = (renderPlain, renderPlain)
-chooseRenderers sty Html = (renderPandocHTML . renderCite . renderPandoc sty,
-                            renderPandocHTML . renderBibEntry . renderPandoc sty) 
-chooseRenderers sty OpenDocument = (renderPandocODT . renderCite . renderPandoc sty,
-                                    renderPandocODT . renderBibEntry . renderPandoc sty)
+chooseRenderers sty Ascii =
+  (renderPandocPlain . renderCite . renderPandoc sty,
+   renderPandocPlain . renderBibEntry . renderPandoc sty)
+chooseRenderers sty Html =
+  (renderPandocHTML . renderCite . renderPandoc sty,
+   renderPandocHTML . renderBibEntry . renderPandoc sty) 
+chooseRenderers sty OpenDocument =
+  (renderPandocODT . renderCite . renderPandoc sty,
+   renderPandocODT . renderBibEntry . renderPandoc sty)
 
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
@@ -136,9 +142,6 @@ wrap openTag closeTag s = openTag ++ s ++ closeTag
 trim :: String -> String 
 trim = unwords . words
 
--- plain text: use citeproc-hs' renderPlain
-
--- HTML: 
 renderItem :: Attr -> [Inline] -> [Inline]
 renderItem attr inlines = [Span attr inlines]
 
@@ -150,6 +153,20 @@ renderBibEntry :: [Inline] -> [Inline]
 renderBibEntry = renderItem bibEntryAttr
   where bibEntryAttr = ("", ["bibliography-entry"], []) 
 
+-- plain text:
+renderPandocPlain :: [Inline] -> String
+renderPandocPlain inlines = writePlain opts doc
+  where opts = WriterOptions { writerStandalone = False
+                             , writerTableOfContents = False
+                             , writerCiteMethod = Citeproc
+                             , writerWrapText = True
+                             , writerColumns = 80 -- TODO: adjustable?
+                             , writerExtensions = empty -- TODO: need any exts?
+                             }
+        doc = Pandoc nullMeta $ [Plain inlines]
+
+
+-- HTML: 
 renderPandocHTML :: [Inline] -> String
 renderPandocHTML inlines = writeHtmlString opts doc 
   where opts = WriterOptions { writerStandalone = False
