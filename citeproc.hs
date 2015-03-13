@@ -8,6 +8,7 @@ import Text.JSON.Generic
 import Text.JSON.Types (get_field)
 import Text.Pandoc.Definition hiding (Cite)
 import Text.Pandoc.Writers.HTML
+import Text.Pandoc.Writers.OpenDocument
 import Text.Pandoc.Options
 --import Text.Pandoc.Generic
 import qualified Data.Map as M
@@ -96,7 +97,7 @@ jsString = JSString . toJSString
 -- 
 
 -- output format selection
-data OutputFormat = Ascii | Html   -- | Odt ...
+data OutputFormat = Ascii | Html | OpenDocument -- ...
 
 type Renderer = [FormattedOutput] -> String
 
@@ -104,11 +105,14 @@ chooseRenderers :: Style -> OutputFormat -> (Renderer, Renderer)
 chooseRenderers sty Ascii = (renderPlain, renderPlain)
 chooseRenderers sty Html = (renderPandocHTML . renderCite . renderPandoc sty,
                             renderPandocHTML . renderBibEntry . renderPandoc sty) 
+chooseRenderers sty OpenDocument = (renderPandocODT . renderCite . renderPandoc sty,
+                                    renderPandocODT . renderBibEntry . renderPandoc sty)
 
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
   | s == "ascii" = Ascii
   | s == "html" = Html
+  | s == "odt" = OpenDocument
   | otherwise = error $ "Unknown output format: " ++ s
  
 -- represents result of citeproc-hs processing
@@ -197,8 +201,16 @@ wrapHTMLStyle s fmt = s'
         -- TODO: stripPeriods :: Bool
         s' = pfx <> wrap spanOpen spanClose (quoted s) <> sfx
                 
--- ODT: TODO                
-
+-- ODT: 
+renderPandocODT :: [Inline] -> String        
+renderPandocODT inlines = writeOpenDocument opts doc
+  where opts = WriterOptions { writerStandalone = False
+                             , writerTableOfContents = False
+                             , writerCiteMethod = Citeproc
+                             , writerWrapText = False
+                             -- TODO: , writerReferenceODT
+                             }
+        doc = Pandoc nullMeta $ [Plain inlines]
  
 --
 -- MAIN
