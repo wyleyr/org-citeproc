@@ -1,9 +1,9 @@
 # citeproc
 
-citeproc is a standalone program that uses Andrea Rossato's [citeproc-hs]
+citeproc is a standalone program that uses [pandoc-citeproc]
 to generate citations and a bibliography, given a database of bibliographic
 references and a [CSL] stylesheet.  The idea is to make it possible for
-non-Haskell programs to use this excellent tool.
+Emacs' [Org mode] exporters to use this excellent tool.
 
 This version is a fork of John MacFarlane's [citeproc] program.  The
 major changes are:
@@ -12,9 +12,10 @@ major changes are:
 - This version renders output directly in a target format (currently, just
   ASCII or HTML) rather than as JSON
 
-[citeproc-hs]: http://gorgias.mine.nu/repos/citeproc-hs/
+[pandoc-citeproc]: https://github.com/jgm/pandoc-citeproc
 [citeproc-js]: http://gsl-nagoya-u.net/http/pub/citeproc-doc.html
 [CSL]: http://citationstyles.org/
+[Org mode]: http://orgmode.org
 [citeproc]: https://github.com/jgm/citeproc 
 
 ## Usage
@@ -23,7 +24,7 @@ major changes are:
 
 - The bibliography file can be in any of the formats that bibutils
   supports.
-- The format can be `ascii` or `html`.
+- The format can be `ascii`, `html`, or `odt`.
 - The program reads JSON from stdin and writes formatted data to stdout.
 
 ## Input
