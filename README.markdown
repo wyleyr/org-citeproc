@@ -34,8 +34,8 @@ A citation data object contains a JSON array of cites.
 A cite is a JSON object describing one source.  Fields can include:
 
 - `id` (string)
-- `prefix` (string or array)
-- `suffix` (string or array)
+- `prefix` (string)
+- `suffix` (string)
 - `label` (string)
 - `locator` (string)
 - `suppress-author` (boolean)
