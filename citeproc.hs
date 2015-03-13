@@ -1,14 +1,18 @@
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables, PatternGuards #-}
 import Text.CSL
 import Text.CSL.Style
-import Text.CSL.Output.Plain ((<>))
 import System.Environment
 import Text.JSON
 import Text.JSON.Generic
 import Text.JSON.Types (get_field)
---import Text.Pandoc.Definition
+import Text.Pandoc.Definition hiding (Cite)
+import Text.Pandoc.Writers.Markdown
+import Text.Pandoc.Writers.HTML
+import Text.Pandoc.Writers.OpenDocument
+import Text.Pandoc.Options
 --import Text.Pandoc.Generic
 import qualified Data.Map as M
+import Data.Set (empty)
 import Control.Monad (unless)
 import System.Exit
 import System.IO
@@ -49,18 +53,20 @@ instance JSON CitationData where
                 _ -> acc -- TODO: error if non-citation in citationItems?
     _ -> Error "Not a citations data cluster"
 
--- JSON reader for citeproc-hs' Cite type
+-- JSON reader for pandoc-citeproc's Cite type
 instance JSON Cite where
   showJSON = toJSON
   readJSON (JSObject o) = case get_field o "id" of
     Just (JSString x) ->
         Ok $ emptyCite{ citeId = fromJSString x
                       , citePrefix = case get_field o "prefix" of
-                                       Just (JSString x) -> PlainText $ fromJSString x
-                                       _ -> PandocText []
+                                       Just (JSString x) ->
+                                         Formatted $ [Str (fromJSString x)]
+                                       _ -> Formatted []
                       , citeSuffix = case get_field o "suffix" of
-                                       Just (JSString x) -> PlainText $ fromJSString x
-                                       _ -> PandocText []
+                                       Just (JSString x) ->
+                                         Formatted $ [Str (fromJSString x)]
+                                       _ -> Formatted []
                       , citeLabel = case get_field o "label" of
                                        Just (JSString x) -> fromJSString x
                                        _ -> ""
@@ -94,21 +100,29 @@ jsString = JSString . toJSString
 -- 
 
 -- output format selection
-data OutputFormat = Ascii | Html   -- | Odt ...
+data OutputFormat = Ascii | Html | OpenDocument -- ...
 
-type Renderer = [FormattedOutput] -> String
+type Renderer = Formatted -> String
 
-chooseRenderers :: OutputFormat -> (Renderer, Renderer)
-chooseRenderers Ascii = (renderPlain, renderPlain)
-chooseRenderers Html = (renderCiteHTML, renderBibEntryHTML) 
+chooseRenderers :: Style -> OutputFormat -> (Renderer, Renderer)
+chooseRenderers sty Ascii =
+  (renderPandocPlain . renderCite . renderPandoc sty,
+   renderPandocPlain . renderBibEntry . renderPandoc sty)
+chooseRenderers sty Html =
+  (renderPandocHTML . renderCite . renderPandoc sty,
+   renderPandocHTML . renderBibEntry . renderPandoc sty) 
+chooseRenderers sty OpenDocument =
+  (renderPandocODT . renderCite . renderPandoc sty,
+   renderPandocODT . renderBibEntry . renderPandoc sty)
 
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
   | s == "ascii" = Ascii
   | s == "html" = Html
+  | s == "odt" = OpenDocument
   | otherwise = error $ "Unknown output format: " ++ s
  
--- represents result of citeproc-hs processing
+-- represents result of pandoc-citeproc processing
 data CiteprocResult = CiteprocResult { cites  :: [String]
                                      , bib    :: [String]
                                      } deriving (Typeable, Data)
@@ -129,63 +143,50 @@ wrap openTag closeTag s = openTag ++ s ++ closeTag
 trim :: String -> String 
 trim = unwords . words
 
--- plain text: use citeproc-hs' renderPlain
+renderItem :: Attr -> [Inline] -> [Inline]
+renderItem attr inlines = [Span attr inlines]
+
+renderCite :: [Inline] -> [Inline]
+renderCite = renderItem citeAttr
+  where citeAttr = ("", ["citation"], []) -- no id, citation class, no other attrs
+
+renderBibEntry :: [Inline] -> [Inline]
+renderBibEntry = renderItem bibEntryAttr
+  where bibEntryAttr = ("", ["bibliography-entry"], []) 
+
+-- plain text:
+renderPandocPlain :: [Inline] -> String
+renderPandocPlain inlines = writePlain opts doc
+  where opts = WriterOptions { writerStandalone = False
+                             , writerTableOfContents = False
+                             , writerCiteMethod = Citeproc
+                             , writerWrapText = True
+                             , writerColumns = 80 -- TODO: adjustable?
+                             , writerExtensions = empty -- TODO: need any exts?
+                             }
+        doc = Pandoc nullMeta $ [Plain inlines]
+
 
 -- HTML: 
-renderCiteHTML :: [FormattedOutput] -> String
-renderCiteHTML = (wrap spanOpen spanClose) . renderHTML
-  where spanOpen = "<span class=\"citation\">"
-        spanClose = "</span>"
+renderPandocHTML :: [Inline] -> String
+renderPandocHTML inlines = writeHtmlString opts doc 
+  where opts = WriterOptions { writerStandalone = False
+                             , writerTableOfContents = False
+                             , writerCiteMethod = Citeproc
+                             , writerSlideVariant = NoSlides
+                             }
+        doc = Pandoc nullMeta $ [Plain inlines]
 
-renderBibEntryHTML :: [FormattedOutput] -> String
-renderBibEntryHTML = (wrap pOpen pClose) . renderHTML
-  where pOpen = "<p class=\"bibliography-entry\">"
-        pClose = "</p>"
-  
-renderHTML :: [FormattedOutput] -> String
-renderHTML = concatMap htmlify
-
-htmlify :: FormattedOutput -> String
-htmlify fo = case fo of
-  (FO fmt xs) -> wrapHTMLStyle (trim $ renderHTML xs) fmt 
-  (FN n fmt) -> wrapHTMLStyle n fmt 
-  (FS s fmt) -> wrapHTMLStyle s fmt
-  (FDel s) -> s 
-  (FUrl target@(url, title) fmt) -> wrapHTMLStyle link fmt
-    where link = wrap ("<a href=\"" ++ url ++ "\">") "</a>" title
-  otherwise -> ""
-
-wrapHTMLStyle :: String -> Formatting -> String
-wrapHTMLStyle s fmt = s'
-  where pfx = prefix fmt
-        sfx = suffix fmt
-        ffam = cssProp "font-family" (fontFamily fmt)
-        fsty = cssProp "font-style" (fontStyle fmt)
-        fvt = cssProp "font-variant" (fontVariant fmt)
-        fwt = cssProp "font-weight" (fontWeight fmt)
-        tdec = if (noDecor fmt) then ""
-               else cssProp "text-decoration" (textDecoration fmt)
-        valn = cssProp "vertical-align" (verticalAlign fmt)
-        tcs = if (noCase fmt) then ""
-                                   -- TODO: capitalize-first is not a valid
-                                   -- CSS text-transform value
-              else cssProp "text-transform" (textCase fmt)
-        dsp = cssProp "display" (display fmt)
-        props = concat $ filter (not . null) [ffam, fsty, fvt, fwt, tdec,
-                                              valn, tcs, dsp]
-        spanOpen = if null props then ""
-                   else "<span style=\"" ++ (trim props) ++ "\">"
-        spanClose = if null props then ""
-                    else "</span>"
-        cssProp name val = if null val then ""
-                           else name ++ ": " ++ val ++ "; "
-        quoted s = if null s || quotes fmt == NoQuote then s
-                   else wrap "\"" "\"" s
-        -- TODO: stripPeriods :: Bool
-        s' = pfx <> wrap spanOpen spanClose (quoted s) <> sfx
-                
--- ODT: TODO                
-
+-- ODT: 
+renderPandocODT :: [Inline] -> String        
+renderPandocODT inlines = writeOpenDocument opts doc
+  where opts = WriterOptions { writerStandalone = False
+                             , writerTableOfContents = False
+                             , writerCiteMethod = Citeproc
+                             , writerWrapText = False
+                             -- TODO: , writerReferenceODT
+                             }
+        doc = Pandoc nullMeta $ [Plain inlines]
  
 --
 -- MAIN
@@ -198,15 +199,15 @@ main = do
     hPutStrLn stderr $ "Usage:  " ++ progname ++ " OUTPUT-FORMAT CSLFILE BIBFILE.."
     exitWith (ExitFailure 1)
   let (backend : cslfile : bibfiles) = args
-  sty <- readCSLFile cslfile
+  sty <- readCSLFile Nothing cslfile
   refs <- concat `fmap` mapM readBiblioFile bibfiles
   res <- decode `fmap` getContents
   -- hPutStrLn stderr $ show res
   let Ok (CitationsData inputCitations) = res
   -- for debugging:
-  -- hPutStrLn stderr $ show cites'
+  -- hPutStrLn stderr $ show inputCitations
   let bibdata = citeproc procOpts sty refs $ map citationItems inputCitations
-  let (crenderer, brenderer) = chooseRenderers $ chooseOutputFormat backend
+  let (crenderer, brenderer) = chooseRenderers sty $ chooseOutputFormat backend
   -- hPutStrLn stderr $ show bibdata
   let citeprocres = CiteprocResult {
                           cites = map crenderer (citations bibdata)
