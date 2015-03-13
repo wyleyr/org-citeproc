@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables, PatternGuards #-}
 import Text.CSL
 import Text.CSL.Style
-import Text.CSL.Output.Plain ((<>))
 import System.Environment
 import Text.JSON
 import Text.JSON.Generic
@@ -54,18 +53,20 @@ instance JSON CitationData where
                 _ -> acc -- TODO: error if non-citation in citationItems?
     _ -> Error "Not a citations data cluster"
 
--- JSON reader for citeproc-hs' Cite type
+-- JSON reader for pandoc-citeproc's Cite type
 instance JSON Cite where
   showJSON = toJSON
   readJSON (JSObject o) = case get_field o "id" of
     Just (JSString x) ->
         Ok $ emptyCite{ citeId = fromJSString x
                       , citePrefix = case get_field o "prefix" of
-                                       Just (JSString x) -> PlainText $ fromJSString x
-                                       _ -> PandocText []
+                                       Just (JSString x) ->
+                                         Formatted $ [Str (fromJSString x)]
+                                       _ -> Formatted []
                       , citeSuffix = case get_field o "suffix" of
-                                       Just (JSString x) -> PlainText $ fromJSString x
-                                       _ -> PandocText []
+                                       Just (JSString x) ->
+                                         Formatted $ [Str (fromJSString x)]
+                                       _ -> Formatted []
                       , citeLabel = case get_field o "label" of
                                        Just (JSString x) -> fromJSString x
                                        _ -> ""
@@ -101,7 +102,7 @@ jsString = JSString . toJSString
 -- output format selection
 data OutputFormat = Ascii | Html | OpenDocument -- ...
 
-type Renderer = [FormattedOutput] -> String
+type Renderer = Formatted -> String
 
 chooseRenderers :: Style -> OutputFormat -> (Renderer, Renderer)
 chooseRenderers sty Ascii =
@@ -121,7 +122,7 @@ chooseOutputFormat s
   | s == "odt" = OpenDocument
   | otherwise = error $ "Unknown output format: " ++ s
  
--- represents result of citeproc-hs processing
+-- represents result of pandoc-citeproc processing
 data CiteprocResult = CiteprocResult { cites  :: [String]
                                      , bib    :: [String]
                                      } deriving (Typeable, Data)
@@ -198,13 +199,13 @@ main = do
     hPutStrLn stderr $ "Usage:  " ++ progname ++ " OUTPUT-FORMAT CSLFILE BIBFILE.."
     exitWith (ExitFailure 1)
   let (backend : cslfile : bibfiles) = args
-  sty <- readCSLFile cslfile
+  sty <- readCSLFile Nothing cslfile
   refs <- concat `fmap` mapM readBiblioFile bibfiles
   res <- decode `fmap` getContents
   -- hPutStrLn stderr $ show res
   let Ok (CitationsData inputCitations) = res
   -- for debugging:
-  -- hPutStrLn stderr $ show cites'
+  -- hPutStrLn stderr $ show inputCitations
   let bibdata = citeproc procOpts sty refs $ map citationItems inputCitations
   let (crenderer, brenderer) = chooseRenderers sty $ chooseOutputFormat backend
   -- hPutStrLn stderr $ show bibdata
