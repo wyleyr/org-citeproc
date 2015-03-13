@@ -176,48 +176,6 @@ renderPandocHTML inlines = writeHtmlString opts doc
                              }
         doc = Pandoc nullMeta $ [Plain inlines]
 
-renderHTML :: [FormattedOutput] -> String
-renderHTML = concatMap htmlify
-
-htmlify :: FormattedOutput -> String
-htmlify fo = case fo of
-  (FO fmt xs) -> wrapHTMLStyle (trim $ renderHTML xs) fmt 
-  (FN n fmt) -> wrapHTMLStyle n fmt 
-  (FS s fmt) -> wrapHTMLStyle s fmt
-  (FDel s) -> s 
-  (FUrl target@(url, title) fmt) -> wrapHTMLStyle link fmt
-    where link = wrap ("<a href=\"" ++ url ++ "\">") "</a>" title
-  otherwise -> ""
-
-wrapHTMLStyle :: String -> Formatting -> String
-wrapHTMLStyle s fmt = s'
-  where pfx = prefix fmt
-        sfx = suffix fmt
-        ffam = cssProp "font-family" (fontFamily fmt)
-        fsty = cssProp "font-style" (fontStyle fmt)
-        fvt = cssProp "font-variant" (fontVariant fmt)
-        fwt = cssProp "font-weight" (fontWeight fmt)
-        tdec = if (noDecor fmt) then ""
-               else cssProp "text-decoration" (textDecoration fmt)
-        valn = cssProp "vertical-align" (verticalAlign fmt)
-        tcs = if (noCase fmt) then ""
-                                   -- TODO: capitalize-first is not a valid
-                                   -- CSS text-transform value
-              else cssProp "text-transform" (textCase fmt)
-        dsp = cssProp "display" (display fmt)
-        props = concat $ filter (not . null) [ffam, fsty, fvt, fwt, tdec,
-                                              valn, tcs, dsp]
-        spanOpen = if null props then ""
-                   else "<span style=\"" ++ (trim props) ++ "\">"
-        spanClose = if null props then ""
-                    else "</span>"
-        cssProp name val = if null val then ""
-                           else name ++ ": " ++ val ++ "; "
-        quoted s = if null s || quotes fmt == NoQuote then s
-                   else wrap "\"" "\"" s
-        -- TODO: stripPeriods :: Bool
-        s' = pfx <> wrap spanOpen spanClose (quoted s) <> sfx
-                
 -- ODT: 
 renderPandocODT :: [Inline] -> String        
 renderPandocODT inlines = writeOpenDocument opts doc
