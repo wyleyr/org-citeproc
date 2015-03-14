@@ -47,7 +47,7 @@ Fields in a cite can include:
 See [json.el] for Elisp code that generates JSON in this format, given
 Org citation objects.
 
-[json.el]: ./blob/master/json.el
+[json.el]: ./json.el
 
 ## Installing citeproc
 
