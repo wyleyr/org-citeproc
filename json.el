@@ -57,11 +57,11 @@ to JSON data that can be read by citeproc-js"
     (:prefix (format "\"prefix\": \"%s\"" (org-element-interpret-data val)))
     (:suffix (format "\"suffix\": \"%s\"" (org-element-interpret-data val)))
     (:parenthetical (if (not val) (format "\"author-in-text\": true") nil))
-    ;; TODO: at least citeproc-hs uses these fields, so we should extract them:
+    ;; TODO: citeproc implementations use these fields, so we should extract them:
     (:suppress-author (if val (format "\"suppress-author\": true") nil))
     (:author-only (if val (format "\"author-only\": true") nil))
     (:label (format "\"label\": \"%s\"" val))
     (:locator (format "\"locator\": \"%s\"" val))
-      ; otherwise, case returns nil
+    ; otherwise, case returns nil
     ))
 
