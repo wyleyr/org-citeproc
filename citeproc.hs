@@ -129,10 +129,12 @@ data CiteprocResult = CiteprocResult { cites  :: [String]
 
                                                
 instance Show CiteprocResult where                                                
-  show cr = concat $ intersperse "\n" (cites cr) ++
-            ["\n=====\n"] ++
-            intersperse "\n" (bib cr) ++
-            ["\n"]
+  show cr = concat $ intersperse citeSep (cites cr) ++ 
+            [citeSep, bibSecSep] ++
+            intersperse bibEntrySep (bib cr) 
+    where citeSep = "////\n"
+          bibEntrySep = "\n" -- TODO: should bib entries be wrapped in paragraphs?
+          bibSecSep = "====\n"
 
 
 -- rendering functions:
@@ -160,7 +162,7 @@ renderPandocPlain inlines = writePlain opts doc
   where opts = WriterOptions { writerStandalone = False
                              , writerTableOfContents = False
                              , writerCiteMethod = Citeproc
-                             , writerWrapText = True
+                             , writerWrapText = True -- TODO: don't break lines?
                              , writerColumns = 80 -- TODO: adjustable?
                              , writerExtensions = empty -- TODO: need any exts?
                              }
