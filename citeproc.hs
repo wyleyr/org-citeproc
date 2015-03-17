@@ -102,19 +102,6 @@ jsString = JSString . toJSString
 -- output format selection
 data OutputFormat = Ascii | Html | OpenDocument -- ...
 
-type Renderer = Formatted -> String
-
-chooseRenderers :: Style -> OutputFormat -> (Renderer, Renderer)
-chooseRenderers sty Ascii =
-  (renderPandocPlain . renderCite . renderPandoc sty,
-   renderPandocPlain . renderBibEntry . renderPandoc sty)
-chooseRenderers sty Html =
-  (renderPandocHTML . renderCite . renderPandoc sty,
-   renderPandocHTML . renderBibEntry . renderPandoc sty) 
-chooseRenderers sty OpenDocument =
-  (renderPandocODT . renderCite . renderPandoc sty,
-   renderPandocODT . renderBibEntry . renderPandoc sty)
-
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
   | s == "ascii" = Ascii
@@ -122,43 +109,49 @@ chooseOutputFormat s
   | s == "odt" = OpenDocument
   | otherwise = error $ "Unknown output format: " ++ s
  
+type ItemRenderer = Formatted -> String
+type BlockRenderer = [Formatted] -> String
+
+chooseRenderers :: Style -> OutputFormat -> (ItemRenderer, BlockRenderer)
+chooseRenderers sty fmt = (topRenderer . renderCite . toPandoc,
+                           topRenderer . renderBibAndEntries)
+  where toPandoc = renderPandoc sty
+        renderBibAndEntries = renderBib . map (renderBibEntry . toPandoc)
+        topRenderer = case fmt of
+          Ascii -> renderPandocPlain
+          Html -> renderPandocHTML
+          OpenDocument -> renderPandocODT
+        
 -- represents result of pandoc-citeproc processing
 data CiteprocResult = CiteprocResult { cites  :: [String]
-                                     , bib    :: [String]
+                                     , bib    :: String
                                      } deriving (Typeable, Data)
 
                                                
-instance Show CiteprocResult where                                                
+instance Show CiteprocResult where 
   show cr = concat $ intersperse citeSep (cites cr) ++ 
             [citeSep, bibSecSep] ++
-            intersperse bibEntrySep (bib cr) 
+            [bib cr] 
     where citeSep = "////\n"
-          bibEntrySep = "\n" -- TODO: should bib entries be wrapped in paragraphs?
           bibSecSep = "====\n"
 
 
 -- rendering functions:
 -- common helpers:
-wrap :: String -> String -> String -> String
-wrap openTag closeTag s = openTag ++ s ++ closeTag 
-
-trim :: String -> String 
-trim = unwords . words
-
-renderItem :: Attr -> [Inline] -> [Inline]
-renderItem attr inlines = [Span attr inlines]
-
-renderCite :: [Inline] -> [Inline]
-renderCite = renderItem citeAttr
+renderCite :: [Inline] -> Block
+renderCite inlines = Plain [Span citeAttr inlines]
   where citeAttr = ("", ["citation"], []) -- no id, citation class, no other attrs
 
-renderBibEntry :: [Inline] -> [Inline]
-renderBibEntry = renderItem bibEntryAttr
-  where bibEntryAttr = ("", ["bibliography-entry"], []) 
+renderBibEntry :: [Inline] -> Block
+renderBibEntry = Para -- TODO: any other attrs?
 
+renderBib :: [Block] -> Block
+renderBib entries = Div bibAttrs entries
+  where bibAttrs = ("", ["bibliography"], [])
+              
 -- plain text:
-renderPandocPlain :: [Inline] -> String
-renderPandocPlain inlines = writePlain opts doc
+renderPandocPlain :: Block -> String
+renderPandocPlain blk = writePlain opts doc
   where opts = WriterOptions { writerStandalone = False
                              , writerTableOfContents = False
                              , writerCiteMethod = Citeproc
@@ -166,29 +159,30 @@ renderPandocPlain inlines = writePlain opts doc
                              , writerColumns = 80 -- TODO: adjustable?
                              , writerExtensions = empty -- TODO: need any exts?
                              }
-        doc = Pandoc nullMeta $ [Plain inlines]
+        doc = Pandoc nullMeta $ [blk]
 
 
 -- HTML: 
-renderPandocHTML :: [Inline] -> String
-renderPandocHTML inlines = writeHtmlString opts doc 
+renderPandocHTML :: Block -> String
+renderPandocHTML blk = writeHtmlString opts doc 
   where opts = WriterOptions { writerStandalone = False
                              , writerTableOfContents = False
                              , writerCiteMethod = Citeproc
+                             , writerWrapText = False
                              , writerSlideVariant = NoSlides
                              }
-        doc = Pandoc nullMeta $ [Plain inlines]
+        doc = Pandoc nullMeta $ [blk]
 
 -- ODT: 
-renderPandocODT :: [Inline] -> String        
-renderPandocODT inlines = writeOpenDocument opts doc
+renderPandocODT :: Block -> String        
+renderPandocODT blk = writeOpenDocument opts doc
   where opts = WriterOptions { writerStandalone = False
                              , writerTableOfContents = False
                              , writerCiteMethod = Citeproc
                              , writerWrapText = False
                              -- TODO: , writerReferenceODT
                              }
-        doc = Pandoc nullMeta $ [Plain inlines]
+        doc = Pandoc nullMeta $ [blk]
  
 --
 -- MAIN
@@ -213,6 +207,6 @@ main = do
   -- hPutStrLn stderr $ show bibdata
   let citeprocres = CiteprocResult {
                           cites = map crenderer (citations bibdata)
-                        , bib   = map brenderer (bibliography bibdata)
+                        , bib   = brenderer (bibliography bibdata)
                         }
   putStrLn $ show citeprocres
