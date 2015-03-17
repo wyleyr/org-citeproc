@@ -148,10 +148,13 @@ renderBibEntry = Para -- TODO: any other attrs?
 renderBib :: [Block] -> Block
 renderBib entries = Div bibAttrs entries
   where bibAttrs = ("", ["bibliography"], [])
+        
+withBlockAsDoc ::  (Pandoc -> String) -> Block -> String        
+withBlockAsDoc writer blk = writer $ Pandoc nullMeta [blk]
               
 -- plain text:
 renderPandocPlain :: Block -> String
-renderPandocPlain blk = writePlain opts doc
+renderPandocPlain = withBlockAsDoc $ writePlain opts 
   where opts = WriterOptions { writerStandalone = False
                              , writerTableOfContents = False
                              , writerCiteMethod = Citeproc
@@ -159,30 +162,26 @@ renderPandocPlain blk = writePlain opts doc
                              , writerColumns = 80 -- TODO: adjustable?
                              , writerExtensions = empty -- TODO: need any exts?
                              }
-        doc = Pandoc nullMeta $ [blk]
-
 
 -- HTML: 
 renderPandocHTML :: Block -> String
-renderPandocHTML blk = writeHtmlString opts doc 
+renderPandocHTML = withBlockAsDoc $ writeHtmlString opts 
   where opts = WriterOptions { writerStandalone = False
                              , writerTableOfContents = False
                              , writerCiteMethod = Citeproc
                              , writerWrapText = False
                              , writerSlideVariant = NoSlides
                              }
-        doc = Pandoc nullMeta $ [blk]
 
 -- ODT: 
 renderPandocODT :: Block -> String        
-renderPandocODT blk = writeOpenDocument opts doc
+renderPandocODT = withBlockAsDoc $ writeOpenDocument opts
   where opts = WriterOptions { writerStandalone = False
                              , writerTableOfContents = False
                              , writerCiteMethod = Citeproc
                              , writerWrapText = False
                              -- TODO: , writerReferenceODT
                              }
-        doc = Pandoc nullMeta $ [blk]
  
 --
 -- MAIN
