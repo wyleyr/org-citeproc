@@ -1,0 +1,23 @@
+#+OPTIONS: ':nil *:t -:t ::t <:t H:3 \n:nil ^:t arch:nil author:t
+#+OPTIONS: c:nil creator:comment d:(not "LOGBOOK") date:t e:t
+#+OPTIONS: email:nil f:t inline:t num:t p:nil pri:nil prop:nil stat:t
+#+OPTIONS: tags:t tasks:t tex:t timestamp:t title:t toc:t todo:t |:t
+#+TITLE: Org-citeproc TODO list
+#+AUTHOR: Richard Lawrence
+#+EMAIL: richard.lawrence@berkeley.edu
+#+DESCRIPTION:
+#+LANGUAGE: en
+#+CREATOR: Emacs 23.4.1 (Org mode 8.3beta)
+#+TAGS: bug(b) newfeature(f) refactor(r) maybe(m)
+#+SEQ_TODO: TODO INPROGRESS WAITING UPSTREAM | DONE WONTFIX
+
+* TODO Warning-free compilation					   :refactor:
+* TODO Correct cabal packaging 					   :refactor:
+* TODO Add support for multi-cite citations			 :newfeature:
+* TODO Add support for linking citations to bib entries		 :newfeature:
+Cf. http://article.gmane.org/gmane.emacs.orgmode/96141
+** TODO Add unique IDs to bibliography entries
+** TODO Optionally wrap citations in links to corresponding entries
+
+* TODO Add support for Zotero-style metadata		   :newfeature:maybe:
+Cf. http://article.gmane.org/gmane.emacs.orgmode/96154
