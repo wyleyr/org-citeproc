@@ -67,27 +67,22 @@ instance JSON Cite where
                                        Just (JSString x) ->
                                          Formatted $ [Str (fromJSString x)]
                                        _ -> Formatted []
+                      -- TODO: can pandoc parse label, locator out of the suffix?
                       , citeLabel = case get_field o "label" of
                                        Just (JSString x) -> fromJSString x
                                        _ -> ""
                       , citeLocator = case get_field o "locator" of
                                        Just (JSString x) -> fromJSString x
                                        _ -> ""
-                      -- , citeNoteNumber = case get_field o "note_number" of
-                      --                  Just (JSString x) -> fromJSString x
-                      --                  _ -> ""
-                      -- , citePosition = case get_field o "position" of
-                      --                  Just (JSString x) -> fromJSString x
-                      --                  _ -> ""
-                      -- , nearNote = case get_field o "near_note" of
-                      --                  Just (JSBool True) -> True
-                      --                  _ -> False
                       , suppressAuthor = case get_field o "suppress-author" of
                                        Just (JSBool True) -> True
                                        _ -> False
                       , authorInText = case get_field o "author-in-text" of
                                        Just (JSBool True) -> True
                                        _ -> False
+                      -- TODO: itemData, uris
+                      -- See: https://raw.githubusercontent.com/citation-style-language/schema/master/csl-citation.json
+                      -- https://raw.githubusercontent.com/citation-style-language/schema/master/csl-data.json
                       }
     _ -> Error "Not a citation item"
   readJSON x = fromJSON x
@@ -143,7 +138,7 @@ renderCite inlines = Plain [Span citeAttr inlines]
   where citeAttr = ("", ["citation"], []) -- no id, citation class, no other attrs
 
 renderBibEntry :: [Inline] -> Block
-renderBibEntry = Para -- TODO: any other attrs?
+renderBibEntry = Para -- TODO: any other attrs? unique ID for linking's sake?
 
 renderBib :: [Block] -> Block
 renderBib entries = Div bibAttrs entries
@@ -209,3 +204,4 @@ main = do
                         , bib   = brenderer (bibliography bibdata)
                         }
   putStrLn $ show citeprocres
+
