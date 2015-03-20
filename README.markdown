@@ -51,11 +51,11 @@ that generates JSON in this format, given Org citation objects.
 
 ## Installing org-citeproc
 
-Change to the source directory and:
+Change to the source directory and run:
 
     cabal build
 
-If you want to use this with Org mode, copy the resulting
+If you want to use org-citeproc with Org mode, copy the resulting
 `org-citeproc` binary from `dist/build/org-citeproc/org-citeproc` to
 `$ORGROOT/bin/org-citeproc`, where `$ORGROOT` is the root of your Org
 mode distribution.  My [wip-cite-org-citeproc branch] of Org mode
@@ -64,7 +64,7 @@ makes use of this binary.
 [wip-cite-org-citeproc branch]: https://github.com/wyleyr/org-mode/
 
 ## Contributing
-There is a list of TODO items [TODO.org].  Contributions of code, bug
+There is a list of TODO items in [TODO.org].  Contributions of code, bug
 reports, and so on are welcome!
 
 [TODO.org]: ./TODO.org
