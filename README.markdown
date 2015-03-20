@@ -1,11 +1,11 @@
-# citeproc
+# org-citeproc
 
-citeproc is a standalone program that uses [pandoc-citeproc]
+org-citeproc is a standalone program that uses [pandoc-citeproc]
 to generate citations and a bibliography, given a database of bibliographic
 references and a [CSL] stylesheet.  The idea is to make it possible for
-Emacs' [Org mode] exporters to use this excellent tool.
+Emacs' [Org mode] exporters to use this excellent tool.  
 
-This version is a fork of John MacFarlane's [citeproc] program.  The
+org-citeproc is a fork of John MacFarlane's [citeproc] program.  The
 major changes are:
 
 - The input JSON format is compatible with the format used by [citeproc-js]
@@ -20,7 +20,7 @@ major changes are:
 
 ## Usage
 
-    citeproc format stylefile.csl bibliofile.bib
+    org-citeproc format stylefile.csl bibliofile.bib
 
 - The bibliography file can be in any of the formats that pandoc-citeproc
   supports.
@@ -49,14 +49,14 @@ Org citation objects.
 
 [json.el]: ./json.el
 
-## Installing citeproc
+## Installing org-citeproc
 
 Change to the source directory and:
 
     cabal build
 
-If you want to use this with Org mode, copy the resulting `citeproc`
-binary from `dist/build/citeproc/citeproc` to
+If you want to use this with Org mode, copy the resulting
+`org-citeproc` binary from `dist/build/org-citeproc/org-citeproc` to
 `$ORGROOT/bin/org-citeproc`, where `$ORGROOT` is the root of your Org
 mode distribution.  My [wip-cite-org-citeproc branch] of Org mode
 makes use of this binary.
