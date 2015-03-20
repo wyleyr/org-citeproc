@@ -44,10 +44,10 @@ Fields in a cite can include:
 
 `id` must be included; the rest are optional.
 
-See [json.el] for Elisp code that generates JSON in this format, given
-Org citation objects.
+See the `*-to-json` functions in the [org-cite] library for Elisp code
+that generates JSON in this format, given Org citation objects.
 
-[json.el]: ./json.el
+[org-cite]: https://github.com/wyleyr/org-mode/blob/wip-cite-org-citeproc/lisp/org-cite.el
 
 ## Installing org-citeproc
 
