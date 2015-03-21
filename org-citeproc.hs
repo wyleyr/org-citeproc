@@ -54,8 +54,8 @@ instance JSON CitationData where
   readJSON x = fromJSON x
 
 -- JSON reader for pandoc-citeproc's Cite type
--- (this needs to be an orphan instance, since
--- neither Cite nor class JSON is defined here)
+-- (this needs to be an orphan instance, since neither Cite nor class JSON is
+-- defined here)
 instance JSON Cite where
   showJSON = toJSON
   readJSON (JSObject o) = case get_field o "id" of
@@ -70,6 +70,11 @@ instance JSON Cite where
                                          Formatted [Str (fromJSString x)]
                                        _ -> Formatted []
                       -- TODO: can pandoc parse label, locator out of the suffix?
+                      -- yes: see toCslCite in Text.CSL.Pandoc in pandoc-citeproc
+                      -- unfortunately, the module doesn't expose this
+                      -- function or the supporting infrastructure;
+                      -- we'd have to turn everything into a Pandoc
+                      -- *before* citation processing, then use processCites
                       , citeLabel = case get_field o "label" of
                                        Just (JSString x) -> fromJSString x
                                        _ -> ""
