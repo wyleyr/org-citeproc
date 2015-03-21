@@ -1,11 +1,13 @@
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
-import Text.CSL
-import Text.CSL.Style
+import Text.CSL hiding (Citation)
+import Text.CSL.Style hiding (Citation)
+import Text.CSL.Pandoc
 import System.Environment
 import Text.JSON
 import Text.JSON.Generic
 import Text.JSON.Types (get_field)
 import Text.Pandoc.Definition hiding (Cite)
+import qualified Text.Pandoc.Definition as PDD (Inline(Cite))
 import Text.Pandoc.Writers.Markdown
 import Text.Pandoc.Writers.HTML
 import Text.Pandoc.Writers.OpenDocument
@@ -94,6 +96,29 @@ instance JSON Cite where
     _ -> Error "Not a citation item"
   readJSON x = fromJSON x
 
+-- transform input into a Pandoc
+citationsAsPandoc :: CitationsData -> Pandoc
+citationsAsPandoc (CitationsData cds) = Pandoc nullMeta [citationBlock]
+  where itemAsCitation i = Citation { citationId = citeId i
+                                    , citationPrefix = case citePrefix i of
+                                        Formatted ss@(s:[]) -> ss
+                                        _ -> []
+                                    , citationSuffix = case citeSuffix i of
+                                        Formatted ss@(s:[]) -> ss
+                                        _ -> []
+                                    , citationMode = if authorInText i 
+                                                     then AuthorInText
+                                                     else if suppressAuthor i
+                                                          then SuppressAuthor
+                                                          else NormalCitation
+                                    , citationNoteNum = 0 -- TODO
+                                    , citationHash = 0 -- TODO
+                                    }
+        citeSep = Str "////\n"
+        asPdCite cd = PDD.Cite (map itemAsCitation (citationItems cd)) [] -- TODO: what is the [Inline] slot for? 
+        citeBibSep = [citeSep, Str "====\n"]
+        inlines = intersperse citeSep (map asPdCite cds) ++ citeBibSep
+        citationBlock = Plain inlines
 --
 -- OUTPUT PROCESSING
 -- 
@@ -111,15 +136,21 @@ chooseOutputFormat s
 type ItemRenderer = Formatted -> String
 type BlockRenderer = [Formatted] -> String
 
-chooseRenderers :: Style -> OutputFormat -> (ItemRenderer, BlockRenderer)
-chooseRenderers sty fmt = (topRenderer . renderCite . toPandoc,
-                           topRenderer . renderBibAndEntries)
-  where toPandoc = renderPandoc sty
-        renderBibAndEntries = renderBib . map (renderBibEntry . toPandoc)
-        topRenderer = case fmt of
-          Ascii -> renderPandocPlain
-          Html -> renderPandocHTML
-          OpenDocument -> renderPandocODT
+-- chooseRenderers :: Style -> OutputFormat -> (ItemRenderer, BlockRenderer)
+-- chooseRenderers sty fmt = (topRenderer . renderCite . toPandoc,
+--                            topRenderer . renderBibAndEntries)
+--   where toPandoc = renderPandoc sty
+--         renderBibAndEntries = renderBib . map (renderBibEntry . toPandoc)
+--         topRenderer = case fmt of
+--           Ascii -> renderPandocPlain
+--           Html -> renderPandocHTML
+--           OpenDocument -> renderPandocODT
+        
+chooseRenderer :: OutputFormat -> Pandoc -> String
+chooseRenderer fmt = case fmt of
+  Ascii -> renderPandocPlain
+  Html -> renderPandocHTML
+  OpenDocument -> renderPandocODT
         
 -- represents result of pandoc-citeproc processing
 data CiteprocResult = CiteprocResult { cites  :: [String]
@@ -152,8 +183,8 @@ withBlockAsDoc ::  (Pandoc -> String) -> Block -> String
 withBlockAsDoc writer block = writer $ Pandoc nullMeta [block]
               
 -- plain text:
-renderPandocPlain :: Block -> String
-renderPandocPlain = withBlockAsDoc $ writePlain opts 
+renderPandocPlain :: Pandoc -> String
+renderPandocPlain = writePlain opts 
   where opts = def { writerStandalone = False
                    , writerTableOfContents = False
                    , writerCiteMethod = Citeproc
@@ -163,8 +194,8 @@ renderPandocPlain = withBlockAsDoc $ writePlain opts
                    }
 
 -- HTML: 
-renderPandocHTML :: Block -> String
-renderPandocHTML = withBlockAsDoc $ writeHtmlString opts 
+renderPandocHTML :: Pandoc -> String
+renderPandocHTML = writeHtmlString opts 
   where opts = def { writerStandalone = False
                    , writerTableOfContents = False
                    , writerCiteMethod = Citeproc
@@ -173,8 +204,8 @@ renderPandocHTML = withBlockAsDoc $ writeHtmlString opts
                    }
 
 -- ODT: 
-renderPandocODT :: Block -> String        
-renderPandocODT = withBlockAsDoc $ writeOpenDocument opts
+renderPandocODT :: Pandoc -> String        
+renderPandocODT = writeOpenDocument opts
   where opts = def { writerStandalone = False
                    , writerTableOfContents = False
                    , writerCiteMethod = Citeproc
@@ -197,15 +228,18 @@ main = do
   refs <- concat `fmap` mapM readBiblioFile bibfiles
   res <- decode `fmap` getContents
   -- hPutStrLn stderr $ show res
-  let Ok (CitationsData inputCitations) = res
+  -- let Ok (CitationsData inputCitations) = res
+  let Ok inputCitations = res
   -- for debugging:
-  -- hPutStrLn stderr $ show inputCitations
-  let bibdata = citeproc procOpts sty refs $ map citationItems inputCitations
-  let (crenderer, brenderer) = chooseRenderers sty $ chooseOutputFormat backend
+  --hPutStrLn stderr $ show inputCitations
+  --let bibdata = citeproc procOpts sty refs $ map citationItems inputCitations
+  let doc = processCites sty refs $ citationsAsPandoc inputCitations
+  -- let (crenderer, brenderer) = chooseRenderers sty $ chooseOutputFormat backend
   -- hPutStrLn stderr $ show bibdata
-  let citeprocres = CiteprocResult {
-                          cites = map crenderer (citations bibdata)
-                        , bib   = brenderer (bibliography bibdata)
-                        }
-  print citeprocres
+  -- let citeprocres = CiteprocResult {
+  --                         cites = map crenderer (citations bibdata)
+  --                       , bib   = brenderer (bibliography bibdata)
+  --                       }
+  -- print citeprocres
+  putStrLn $ (chooseRenderer . chooseOutputFormat) backend $ doc
 
