@@ -11,12 +11,10 @@ import Text.Pandoc.Writers.HTML
 import Text.Pandoc.Writers.OpenDocument
 import Text.Pandoc.Options
 --import Text.Pandoc.Generic
-import qualified Data.Map as M
 import Data.Set (empty)
 import Control.Monad (unless)
 import System.Exit
 import System.IO
-import Data.Maybe (fromMaybe)
 import Data.List (intersperse)
 
 --
@@ -24,41 +22,45 @@ import Data.List (intersperse)
 -- 
 
 -- represents arrays of citeproc-js citation data JSON objects
-data CitationsData = CitationsData [CitationData]
+data CitationsData = CitationsData [CitationData] deriving (Typeable, Data)
 
 instance JSON CitationsData where
-  -- showJSON = toJSON -- TODO: re-encode as array
-  readJSON (JSArray cds) = Ok $ CitationsData citations
-    where citations = reverse $ foldl getCitations [] cds
+  showJSON (CitationsData cds) = JSArray $ map showJSON cds 
+  readJSON (JSArray cds) = Ok $ CitationsData cs
+    where cs = reverse $ foldl getCitations [] cds
           getCitations acc obj = case readJSON obj of
                 Ok cd@(CitationData _ _) -> cd:acc 
                 _ -> acc -- TODO: error if non-citation in the array?
+  readJSON x = fromJSON x
  
 -- represents the citeproc-js citation data JSON object 
 data CitationData = CitationData { citationItems :: [Cite]
                                    -- TODO: data structure for properties
                                  , properties :: [String]
-                                 }
+                                 } deriving (Typeable, Data)
   
 instance JSON CitationData where
-  -- showJSON = toJSON -- TODO: re-encode using citationItems, etc.
+  showJSON = toJSON  
   readJSON (JSObject o) = case get_field o "citationItems" of
     Just (JSArray cs) ->
-      Ok $ CitationData { citationItems = cites
+      Ok $ CitationData { citationItems = cis
                         , properties = [] -- TODO
                         }
-        where cites = reverse $ foldl getCites [] cs
+        where cis = reverse $ foldl getCites [] cs
               getCites acc obj = case readJSON obj of
                 Ok c@(Cite _ _ _ _ _ _ _ _ _ _ _) -> c:acc 
                 _ -> acc -- TODO: error if non-citation in citationItems?
     _ -> Error "Not a citations data cluster"
+  readJSON x = fromJSON x
 
 -- JSON reader for pandoc-citeproc's Cite type
+-- (this needs to be an orphan instance, since
+-- neither Cite nor class JSON is defined here)
 instance JSON Cite where
   showJSON = toJSON
   readJSON (JSObject o) = case get_field o "id" of
-    Just (JSString x) ->
-        Ok $ emptyCite{ citeId = fromJSString x
+    Just (JSString citeid) ->
+        Ok $ emptyCite{ citeId = fromJSString citeid
                       , citePrefix = case get_field o "prefix" of
                                        Just (JSString x) ->
                                          Formatted $ [Str (fromJSString x)]
@@ -86,9 +88,6 @@ instance JSON Cite where
                       }
     _ -> Error "Not a citation item"
   readJSON x = fromJSON x
-
-jsString :: String -> JSValue
-jsString = JSString . toJSString
 
 --
 -- OUTPUT PROCESSING
@@ -145,38 +144,38 @@ renderBib entries = Div bibAttrs entries
   where bibAttrs = ("", ["bibliography"], [])
         
 withBlockAsDoc ::  (Pandoc -> String) -> Block -> String        
-withBlockAsDoc writer blk = writer $ Pandoc nullMeta [blk]
+withBlockAsDoc writer block = writer $ Pandoc nullMeta [block]
               
 -- plain text:
 renderPandocPlain :: Block -> String
 renderPandocPlain = withBlockAsDoc $ writePlain opts 
-  where opts = WriterOptions { writerStandalone = False
-                             , writerTableOfContents = False
-                             , writerCiteMethod = Citeproc
-                             , writerWrapText = True -- TODO: don't break lines?
-                             , writerColumns = 80 -- TODO: adjustable?
-                             , writerExtensions = empty -- TODO: need any exts?
-                             }
+  where opts = def { writerStandalone = False
+                   , writerTableOfContents = False
+                   , writerCiteMethod = Citeproc
+                   , writerWrapText = True -- TODO: don't break lines?
+                   , writerColumns = 80 -- TODO: adjustable?
+                   , writerExtensions = empty -- TODO: need any exts?
+                   }
 
 -- HTML: 
 renderPandocHTML :: Block -> String
 renderPandocHTML = withBlockAsDoc $ writeHtmlString opts 
-  where opts = WriterOptions { writerStandalone = False
-                             , writerTableOfContents = False
-                             , writerCiteMethod = Citeproc
-                             , writerWrapText = False
-                             , writerSlideVariant = NoSlides
-                             }
+  where opts = def { writerStandalone = False
+                   , writerTableOfContents = False
+                   , writerCiteMethod = Citeproc
+                   , writerWrapText = False
+                   , writerSlideVariant = NoSlides
+                   }
 
 -- ODT: 
 renderPandocODT :: Block -> String        
 renderPandocODT = withBlockAsDoc $ writeOpenDocument opts
-  where opts = WriterOptions { writerStandalone = False
-                             , writerTableOfContents = False
-                             , writerCiteMethod = Citeproc
-                             , writerWrapText = False
-                             -- TODO: , writerReferenceODT
-                             }
+  where opts = def { writerStandalone = False
+                   , writerTableOfContents = False
+                   , writerCiteMethod = Citeproc
+                   , writerWrapText = False
+                   -- TODO: , writerReferenceODT                    
+                   }
  
 --
 -- MAIN
