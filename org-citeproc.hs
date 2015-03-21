@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables, PatternGuards #-}
+{-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
 import Text.CSL
 import Text.CSL.Style
 import System.Environment
@@ -43,12 +43,12 @@ instance JSON CitationData where
   showJSON = toJSON  
   readJSON (JSObject o) = case get_field o "citationItems" of
     Just (JSArray cs) ->
-      Ok $ CitationData { citationItems = cis
-                        , properties = [] -- TODO
-                        }
+      Ok CitationData { citationItems = cis
+                      , properties = [] -- TODO
+                      }
         where cis = reverse $ foldl getCites [] cs
               getCites acc obj = case readJSON obj of
-                Ok c@(Cite _ _ _ _ _ _ _ _ _ _ _) -> c:acc 
+                Ok c@(Cite {}) -> c:acc 
                 _ -> acc -- TODO: error if non-citation in citationItems?
     _ -> Error "Not a citations data cluster"
   readJSON x = fromJSON x
@@ -63,11 +63,11 @@ instance JSON Cite where
         Ok $ emptyCite{ citeId = fromJSString citeid
                       , citePrefix = case get_field o "prefix" of
                                        Just (JSString x) ->
-                                         Formatted $ [Str (fromJSString x)]
+                                         Formatted [Str (fromJSString x)]
                                        _ -> Formatted []
                       , citeSuffix = case get_field o "suffix" of
                                        Just (JSString x) ->
-                                         Formatted $ [Str (fromJSString x)]
+                                         Formatted [Str (fromJSString x)]
                                        _ -> Formatted []
                       -- TODO: can pandoc parse label, locator out of the suffix?
                       , citeLabel = case get_field o "label" of
@@ -140,7 +140,7 @@ renderBibEntry :: [Inline] -> Block
 renderBibEntry = Para -- TODO: any other attrs? unique ID for linking's sake?
 
 renderBib :: [Block] -> Block
-renderBib entries = Div bibAttrs entries
+renderBib = Div bibAttrs 
   where bibAttrs = ("", ["bibliography"], [])
         
 withBlockAsDoc ::  (Pandoc -> String) -> Block -> String        
@@ -202,5 +202,5 @@ main = do
                           cites = map crenderer (citations bibdata)
                         , bib   = brenderer (bibliography bibdata)
                         }
-  putStrLn $ show citeprocres
+  print citeprocres
 
