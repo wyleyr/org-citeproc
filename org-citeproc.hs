@@ -14,10 +14,10 @@ import Text.Pandoc.Writers.Native
 import Text.Pandoc.Options
 --import Text.Pandoc.Generic
 import Data.Set (empty)
+import Data.List (intersperse)
 import Control.Monad (unless)
 import System.Exit
 import System.IO
-import Data.List (intersperse)
 
 --
 -- INPUT PROCESSING
@@ -62,6 +62,14 @@ instance JSON CitationData where
                                       } 
     _ -> Error "Not a citations data cluster"
   readJSON x = fromJSON x
+
+-- convenience accessors for CitationData properties:
+getCPrefix :: CitationData -> [Inline]
+getCPrefix = commonPrefix . properties
+
+getCSuffix :: CitationData -> [Inline]
+getCSuffix = commonSuffix . properties
+
 
 -- represents properties of a citation data JSON object
 data DataProperties = DataProperties { noteIndex :: Int
@@ -154,37 +162,59 @@ toPandocCite :: CitationData -> Inline
 toPandocCite cd = PDD.Cite citas []
   where citas = map itemAsCitation $ citationItems cd
 
-toMultiCiteGroup :: CitationData -> [Inline]
-toMultiCiteGroup cd = group
+data MultiCite = InTextMulti CitationData
+               | ParenMulti CitationData
+ 
+multiCite :: MultiCite -> [Inline]
+multiCite (InTextMulti cd) = group
+  -- in the in-text case, we need to break up the CitationData into
+  -- multiple individual records, one for each reference, and add the
+  -- common prefix and suffix in the surrounding text
   where items = citationItems cd
         props = properties cd 
         cpfx = commonPrefix props
         csfx = commonSuffix props
-        asCd i = CitationData { citationItems = [i],
-                                properties = props} 
+        asCd i = CitationData { citationItems = [i], properties = props } 
         citas = map (toPandocCite . asCd) items
-        sep = Str ", " -- TODO: should grab separator from style
+        sep = Str ", " -- TODO: grab separator from style?
         group = cpfx ++ intersperse sep citas ++ csfx
+multiCite (ParenMulti cd) = [toPandocCite newCd]
+  -- in the parenthetical case, we just need to prepend the common
+  -- prefix to the prefix of the first item, and append the suffix to
+  -- the suffix of the last item (which might be the same), then treat
+  -- the resulting CitationData normally, as a single pandoc Citation
+  where cpfx = getCPrefix cd
+        csfx = getCSuffix cd
+        newItems = case citationItems cd of
+          [] -> [] -- edge case: common prefix or suffix, but no items
+                   -- (this case is prevented by Org's parser)
+          (first:[]) -> [first { citePrefix = cpfx ++ (citePrefix first)
+                               , citeSuffix = (citeSuffix first) ++ csfx }]
+          (first:xs) -> [first { citePrefix = cpfx ++ (citePrefix first) }] ++
+                        init xs ++
+                        [lst { citeSuffix = (citeSuffix lst) ++ csfx }] 
+            where lst = last xs
+        newCd = cd { citationItems = newItems }
 
 citationsAsPandoc :: [CitationData] -> Pandoc
-citationsAsPandoc cds = Pandoc nullMeta [citationBlock]
+citationsAsPandoc cds = Pandoc nullMeta citationBlocks
   where citeSep = Str "////\n" -- TODO: something like "<!--endCite-->"?
-        citeBibSep = Str "====\n"
-        -- behave like LaTeX by splitting up in-text citations with 2+
-        -- references:
+        citeBibSep = Plain $ [Str "====\n"]
+        -- a citation is a `multi-cite' and needs to be handled
+        -- specially when it has a common prefix or suffix, or when it
+        -- contains only in-text references (and there are 2+).  In
+        -- these cases, we behave like LaTeX:
         atLeastTwo xs = not (null xs) && not (null $ tail xs)
         multiInText cd = atLeastTwo (citationItems cd) &&
                          all authorInText (citationItems cd)
-        -- TODO: in the in-text case, common prefix and suffix go in
-        -- the surrounding text. in the parenthetical case, we should
-        -- prepend the common prefix to the prefix of the first
-        -- citation, and append the common suffix to the suffix of the
-        -- last citation before processing
-        getInlines acc cd = if multiInText cd
-                            then acc ++ toMultiCiteGroup cd ++ [citeSep]
-                            else acc ++ [toPandocCite cd, citeSep]
-        inlines = foldl getInlines [] cds ++ [citeBibSep]
-        citationBlock = Plain inlines
+        hasCommons cd = not $ null $ getCPrefix cd ++ getCSuffix cd 
+        getBlocks cd acc = if multiInText cd
+                           then (Plain $ multiCite (InTextMulti cd) ++ [citeSep]):acc
+                           else if hasCommons cd
+                                then (Plain $ multiCite (ParenMulti cd) ++ [citeSep]):acc
+                                else (Plain $ [toPandocCite cd, citeSep]):acc
+        citationBlocks = foldr getBlocks [citeBibSep] cds
+
 --
 -- OUTPUT PROCESSING
 -- 
