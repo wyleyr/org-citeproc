@@ -1,21 +1,23 @@
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
-import Text.CSL
-import Text.CSL.Style
+import Text.CSL hiding (Citation, Cite(..))
+import Text.CSL.Pandoc
 import System.Environment
 import Text.JSON
 import Text.JSON.Generic
 import Text.JSON.Types (get_field)
 import Text.Pandoc.Definition hiding (Cite)
+import qualified Text.Pandoc.Definition as PDD (Inline(Cite))
 import Text.Pandoc.Writers.Markdown
 import Text.Pandoc.Writers.HTML
 import Text.Pandoc.Writers.OpenDocument
+import Text.Pandoc.Writers.Native
 import Text.Pandoc.Options
 --import Text.Pandoc.Generic
 import Data.Set (empty)
+import Data.List (intersperse)
 import Control.Monad (unless)
 import System.Exit
 import System.IO
-import Data.List (intersperse)
 
 --
 -- INPUT PROCESSING
@@ -36,124 +38,209 @@ instance JSON CitationsData where
 -- represents the citeproc-js citation data JSON object 
 data CitationData = CitationData { citationItems :: [Cite]
                                    -- TODO: data structure for properties
-                                 , properties :: [String]
+                                 , properties :: DataProperties
                                  } deriving (Typeable, Data)
   
 instance JSON CitationData where
   showJSON = toJSON  
-  readJSON (JSObject o) = case get_field o "citationItems" of
-    Just (JSArray cs) ->
-      Ok CitationData { citationItems = cis
-                      , properties = [] -- TODO
-                      }
-        where cis = reverse $ foldl getCites [] cs
-              getCites acc obj = case readJSON obj of
-                Ok c@(Cite {}) -> c:acc 
-                _ -> acc -- TODO: error if non-citation in citationItems?
+  readJSON (JSObject o) = case get_field o "citationItems" of 
+    Just (JSArray cs) -> Ok CitationData { citationItems = cis
+                                         , properties = props
+                                         }
+      where getCites acc obj = case readJSON obj of
+              Ok c@(Cite {}) -> c:acc 
+              _ -> acc -- TODO: error if non-citation in citationItems?
+            cis = reverse $ foldl getCites [] cs
+            props = case get_field o "properties" of
+              Just p -> case readJSON p of
+                Ok ps@(DataProperties {}) -> ps
+                _ -> defProps
+              _ -> defProps
+            defProps = DataProperties { noteIndex = 0
+                                      , commonPrefix = []
+                                      , commonSuffix = []
+                                      } 
     _ -> Error "Not a citations data cluster"
   readJSON x = fromJSON x
 
--- JSON reader for pandoc-citeproc's Cite type
--- (this needs to be an orphan instance, since neither Cite nor class JSON is
--- defined here)
+-- convenience accessors for CitationData properties:
+getCPrefix :: CitationData -> [Inline]
+getCPrefix = commonPrefix . properties
+
+getCSuffix :: CitationData -> [Inline]
+getCSuffix = commonSuffix . properties
+
+
+-- represents properties of a citation data JSON object
+data DataProperties = DataProperties { noteIndex :: Int
+                                     -- non-standard properties
+                                     -- supported here for LaTeX-like
+                                     -- multi-cite behavior:
+                                     , commonPrefix :: [Inline]
+                                     , commonSuffix :: [Inline]
+                                     } deriving (Typeable, Data)
+
+instance JSON DataProperties where
+  showJSON = toJSON  
+  readJSON (JSObject o) = Ok DataProperties { noteIndex = n
+                                            , commonPrefix = cpfx
+                                            , commonSuffix = csfx
+                                            }
+    where n = 0  -- TODO 
+          asInlines field = case get_field o field of
+            Just (JSString s) -> [Str $ fromJSString s]
+            _ -> []
+          cpfx = asInlines "common-prefix"
+          csfx = asInlines "common-suffix"
+  readJSON x = fromJSON x
+
+-- represents an individual work in a citation data JSON object
+data Cite = Cite { citeId :: String
+                 , citePrefix :: [Inline]
+                 , citeSuffix :: [Inline]
+                 , citeLabel :: String
+                 , citeLocator :: String
+                 , suppressAuthor :: Bool
+                 , authorInText :: Bool
+                 -- , itemData :: [ItemData] -- TODO
+                 , uris :: [String]
+                 } deriving (Typeable, Data, Show)
+
 instance JSON Cite where
   showJSON = toJSON
   readJSON (JSObject o) = case get_field o "id" of
     Just (JSString citeid) ->
-        Ok $ emptyCite{ citeId = fromJSString citeid
-                      , citePrefix = case get_field o "prefix" of
-                                       Just (JSString x) ->
-                                         Formatted [Str (fromJSString x)]
-                                       _ -> Formatted []
-                      , citeSuffix = case get_field o "suffix" of
-                                       Just (JSString x) ->
-                                         Formatted [Str (fromJSString x)]
-                                       _ -> Formatted []
-                      -- TODO: can pandoc parse label, locator out of the suffix?
-                      -- yes: see toCslCite in Text.CSL.Pandoc in pandoc-citeproc
-                      -- unfortunately, the module doesn't expose this
-                      -- function or the supporting infrastructure;
-                      -- we'd have to turn everything into a Pandoc
-                      -- *before* citation processing, then use processCites
-                      , citeLabel = case get_field o "label" of
-                                       Just (JSString x) -> fromJSString x
-                                       _ -> ""
-                      , citeLocator = case get_field o "locator" of
-                                       Just (JSString x) -> fromJSString x
-                                       _ -> ""
-                      , suppressAuthor = case get_field o "suppress-author" of
-                                       Just (JSBool True) -> True
-                                       _ -> False
-                      , authorInText = case get_field o "author-in-text" of
-                                       Just (JSBool True) -> True
-                                       _ -> False
-                      -- TODO: itemData, uris
+        Ok Cite { citeId = fromJSString citeid
+                , citePrefix = case get_field o "prefix" of
+                    Just (JSString s) -> [Str $ fromJSString s]
+                    _ -> [] 
+                , citeSuffix = case get_field o "suffix" of
+                    Just (JSString s) -> [Str $ fromJSString s]
+                    _ -> []
+                , citeLabel = case get_field o "label" of
+                    Just (JSString x) -> fromJSString x
+                    _ -> ""
+                , citeLocator = case get_field o "locator" of
+                    Just (JSString x) -> fromJSString x
+                    _ -> ""
+                , suppressAuthor = case get_field o "suppress-author" of
+                    Just (JSBool True) -> True
+                    _ -> False
+                , authorInText = case get_field o "author-in-text" of
+                    Just (JSBool True) -> True
+                    _ -> False
+                , uris = case get_field o "uris" of
+                    Just (JSArray ss) -> us
+                      where us = reverse $ foldl getUris [] ss
+                            getUris acc obj = case readJSON obj of
+                              -- TODO: convert to Links
+                              Ok (JSString s) -> fromJSString s : acc 
+                              _ -> acc -- TODO: error if non-strings in field?
+                    _ -> []
+                      -- TODO: itemData
                       -- See: https://raw.githubusercontent.com/citation-style-language/schema/master/csl-citation.json
                       -- https://raw.githubusercontent.com/citation-style-language/schema/master/csl-data.json
-                      }
+                }
     _ -> Error "Not a citation item"
   readJSON x = fromJSON x
+
+-- functions to transform input into a Pandoc
+itemAsCitation :: Cite -> Citation
+itemAsCitation i = Citation { citationId = citeId i
+                            , citationPrefix = citePrefix i
+                            , citationSuffix = citeSuffix i
+                            , citationMode = if authorInText i 
+                                             then AuthorInText
+                                             else if suppressAuthor i
+                                                  then SuppressAuthor
+                                                  else NormalCitation
+                            , citationNoteNum = 0 
+                            , citationHash = 0 
+                            }
+                   
+toPandocCite :: CitationData -> Inline
+toPandocCite cd = PDD.Cite citas []
+  where citas = map itemAsCitation $ citationItems cd
+
+data MultiCite = InTextMulti CitationData
+               | ParenMulti CitationData
+ 
+multiCite :: MultiCite -> [Inline]
+multiCite (InTextMulti cd) = group
+  -- in the in-text case, we need to break up the CitationData into
+  -- multiple individual records, one for each reference, and add the
+  -- common prefix and suffix in the surrounding text
+  where items = citationItems cd
+        props = properties cd 
+        cpfx = commonPrefix props
+        csfx = commonSuffix props
+        asCd i = CitationData { citationItems = [i], properties = props } 
+        citas = map (toPandocCite . asCd) items
+        sep = Str ", " -- TODO: grab separator from style?
+        group = cpfx ++ intersperse sep citas ++ csfx
+multiCite (ParenMulti cd) = [toPandocCite newCd]
+  -- in the parenthetical case, we just need to prepend the common
+  -- prefix to the prefix of the first item, and append the suffix to
+  -- the suffix of the last item (which might be the same), then treat
+  -- the resulting CitationData normally, as a single pandoc Citation
+  where cpfx = getCPrefix cd
+        csfx = getCSuffix cd
+        newItems = case citationItems cd of
+          [] -> [] -- edge case: common prefix or suffix, but no items
+                   -- (this case is prevented by Org's parser)
+          [first] -> [first { citePrefix = cpfx ++ citePrefix first
+                            , citeSuffix = citeSuffix first ++ csfx }]
+          (first:xs) -> [first { citePrefix = cpfx ++ citePrefix first }] ++
+                        init xs ++
+                        [lst { citeSuffix = citeSuffix lst ++ csfx }] 
+            where lst = last xs
+        newCd = cd { citationItems = newItems }
+
+citationsAsPandoc :: [CitationData] -> Pandoc
+citationsAsPandoc cds = Pandoc nullMeta citationBlocks
+  where citeSep = Str "////\n" -- TODO: something like "<!--endCite-->"?
+        citeBibSep = Plain [Str "====\n"]
+        -- a citation is a `multi-cite' and needs to be handled
+        -- specially when it has a common prefix or suffix, or when it
+        -- contains only in-text references (and there are 2+).  In
+        -- these cases, we behave like LaTeX:
+        atLeastTwo xs = not (null xs) && not (null $ tail xs)
+        multiInText cd = atLeastTwo (citationItems cd) &&
+                         all authorInText (citationItems cd)
+        hasCommons cd = not $ null $ getCPrefix cd ++ getCSuffix cd 
+        getBlocks cd acc
+          | multiInText cd = (Plain $ multiCite (InTextMulti cd) ++ [citeSep]) : acc
+          | hasCommons cd = (Plain $ multiCite (ParenMulti cd) ++ [citeSep]) : acc
+          | otherwise = Plain [toPandocCite cd, citeSep] : acc
+        citationBlocks = foldr getBlocks [citeBibSep] cds
 
 --
 -- OUTPUT PROCESSING
 -- 
 
 -- output format selection
-data OutputFormat = Ascii | Html | OpenDocument -- ...
+data OutputFormat = Ascii | Html | OpenDocument | Native -- ...
 
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
   | s == "ascii" = Ascii
   | s == "html" = Html
   | s == "odt" = OpenDocument
+  | s == "native" = Native
   | otherwise = error $ "Unknown output format: " ++ s
  
-type ItemRenderer = Formatted -> String
-type BlockRenderer = [Formatted] -> String
-
-chooseRenderers :: Style -> OutputFormat -> (ItemRenderer, BlockRenderer)
-chooseRenderers sty fmt = (topRenderer . renderCite . toPandoc,
-                           topRenderer . renderBibAndEntries)
-  where toPandoc = renderPandoc sty
-        renderBibAndEntries = renderBib . map (renderBibEntry . toPandoc)
-        topRenderer = case fmt of
-          Ascii -> renderPandocPlain
-          Html -> renderPandocHTML
-          OpenDocument -> renderPandocODT
+       
+chooseRenderer :: OutputFormat -> Pandoc -> String
+chooseRenderer fmt = case fmt of
+  Ascii -> renderPandocPlain
+  Html -> renderPandocHTML
+  OpenDocument -> renderPandocODT
+  Native -> renderPandocNative
         
--- represents result of pandoc-citeproc processing
-data CiteprocResult = CiteprocResult { cites  :: [String]
-                                     , bib    :: String
-                                     } deriving (Typeable, Data)
-
-                                               
-instance Show CiteprocResult where 
-  show cr = concat $ intersperse citeSep (cites cr) ++ 
-            [citeSep, bibSecSep] ++
-            [bib cr] 
-    where citeSep = "////\n"
-          bibSecSep = "====\n"
-
-
 -- rendering functions:
--- common helpers:
-renderCite :: [Inline] -> Block
-renderCite inlines = Plain [Span citeAttr inlines]
-  where citeAttr = ("", ["citation"], []) -- no id, citation class, no other attrs
-
-renderBibEntry :: [Inline] -> Block
-renderBibEntry = Para -- TODO: any other attrs? unique ID for linking's sake?
-
-renderBib :: [Block] -> Block
-renderBib = Div bibAttrs 
-  where bibAttrs = ("", ["bibliography"], [])
-        
-withBlockAsDoc ::  (Pandoc -> String) -> Block -> String        
-withBlockAsDoc writer block = writer $ Pandoc nullMeta [block]
-              
 -- plain text:
-renderPandocPlain :: Block -> String
-renderPandocPlain = withBlockAsDoc $ writePlain opts 
+renderPandocPlain :: Pandoc -> String
+renderPandocPlain = writePlain opts 
   where opts = def { writerStandalone = False
                    , writerTableOfContents = False
                    , writerCiteMethod = Citeproc
@@ -163,8 +250,8 @@ renderPandocPlain = withBlockAsDoc $ writePlain opts
                    }
 
 -- HTML: 
-renderPandocHTML :: Block -> String
-renderPandocHTML = withBlockAsDoc $ writeHtmlString opts 
+renderPandocHTML :: Pandoc -> String
+renderPandocHTML = writeHtmlString opts 
   where opts = def { writerStandalone = False
                    , writerTableOfContents = False
                    , writerCiteMethod = Citeproc
@@ -173,8 +260,8 @@ renderPandocHTML = withBlockAsDoc $ writeHtmlString opts
                    }
 
 -- ODT: 
-renderPandocODT :: Block -> String        
-renderPandocODT = withBlockAsDoc $ writeOpenDocument opts
+renderPandocODT :: Pandoc -> String        
+renderPandocODT = writeOpenDocument opts
   where opts = def { writerStandalone = False
                    , writerTableOfContents = False
                    , writerCiteMethod = Citeproc
@@ -182,6 +269,11 @@ renderPandocODT = withBlockAsDoc $ writeOpenDocument opts
                    -- TODO: , writerReferenceODT                    
                    }
  
+-- Native:
+renderPandocNative :: Pandoc -> String
+renderPandocNative = writeNative opts
+  where opts = def { writerStandalone = False }
+
 --
 -- MAIN
 -- 
@@ -199,13 +291,7 @@ main = do
   -- hPutStrLn stderr $ show res
   let Ok (CitationsData inputCitations) = res
   -- for debugging:
-  -- hPutStrLn stderr $ show inputCitations
-  let bibdata = citeproc procOpts sty refs $ map citationItems inputCitations
-  let (crenderer, brenderer) = chooseRenderers sty $ chooseOutputFormat backend
-  -- hPutStrLn stderr $ show bibdata
-  let citeprocres = CiteprocResult {
-                          cites = map crenderer (citations bibdata)
-                        , bib   = brenderer (bibliography bibdata)
-                        }
-  print citeprocres
+  --hPutStrLn stderr $ show inputCitations
+  let doc = processCites sty refs $ citationsAsPandoc inputCitations
+  putStrLn $ (chooseRenderer . chooseOutputFormat) backend doc
 
