@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
 import Text.CSL hiding (Citation, Cite(..))
-import Text.CSL.Style hiding (Citation, Cite(..))
 import Text.CSL.Pandoc
 import System.Environment
 import Text.JSON
@@ -123,8 +122,8 @@ itemAsCitation i = Citation { citationId = citeId i
                             }
                    
 toPandocCite :: CitationData -> Inline
-toPandocCite cd = PDD.Cite citations []
-  where citations = map itemAsCitation $ citationItems cd
+toPandocCite cd = PDD.Cite citas []
+  where citas = map itemAsCitation $ citationItems cd
 
 toMultiCiteGroup :: CitationData -> [Inline]
 toMultiCiteGroup cd = group
@@ -133,9 +132,9 @@ toMultiCiteGroup cd = group
         splitCds = map (\i -> CitationData { citationItems = [i],
                                              properties = props })
                        items  
-        citations = map toPandocCite splitCds
-        lastCite = last citations
-        butLast = init citations
+        citas = map toPandocCite splitCds
+        lastCite = last citas
+        butLast = init citas
         sep = Str ", " -- TODO: configurable separator?
         lastSep = Str ", and " -- TODO: internationalize
         group = (intersperse sep butLast) ++ [lastSep, lastCite]
@@ -168,55 +167,14 @@ chooseOutputFormat s
   | s == "odt" = OpenDocument
   | otherwise = error $ "Unknown output format: " ++ s
  
-type ItemRenderer = Formatted -> String
-type BlockRenderer = [Formatted] -> String
-
--- chooseRenderers :: Style -> OutputFormat -> (ItemRenderer, BlockRenderer)
--- chooseRenderers sty fmt = (topRenderer . renderCite . toPandoc,
---                            topRenderer . renderBibAndEntries)
---   where toPandoc = renderPandoc sty
---         renderBibAndEntries = renderBib . map (renderBibEntry . toPandoc)
---         topRenderer = case fmt of
---           Ascii -> renderPandocPlain
---           Html -> renderPandocHTML
---           OpenDocument -> renderPandocODT
-        
+       
 chooseRenderer :: OutputFormat -> Pandoc -> String
 chooseRenderer fmt = case fmt of
   Ascii -> renderPandocPlain
   Html -> renderPandocHTML
   OpenDocument -> renderPandocODT
         
--- represents result of pandoc-citeproc processing
-data CiteprocResult = CiteprocResult { cites  :: [String]
-                                     , bib    :: String
-                                     } deriving (Typeable, Data)
-
-                                               
-instance Show CiteprocResult where 
-  show cr = concat $ intersperse citeSep (cites cr) ++ 
-            [citeSep, bibSecSep] ++
-            [bib cr] 
-    where citeSep = "////\n"
-          bibSecSep = "====\n"
-
-
 -- rendering functions:
--- common helpers:
-renderCite :: [Inline] -> Block
-renderCite inlines = Plain [Span citeAttr inlines]
-  where citeAttr = ("", ["citation"], []) -- no id, citation class, no other attrs
-
-renderBibEntry :: [Inline] -> Block
-renderBibEntry = Para -- TODO: any other attrs? unique ID for linking's sake?
-
-renderBib :: [Block] -> Block
-renderBib = Div bibAttrs 
-  where bibAttrs = ("", ["bibliography"], [])
-        
-withBlockAsDoc ::  (Pandoc -> String) -> Block -> String        
-withBlockAsDoc writer block = writer $ Pandoc nullMeta [block]
-              
 -- plain text:
 renderPandocPlain :: Pandoc -> String
 renderPandocPlain = writePlain opts 
@@ -264,17 +222,8 @@ main = do
   res <- decode `fmap` getContents
   -- hPutStrLn stderr $ show res
   let Ok (CitationsData inputCitations) = res
-  -- let Ok inputCitations = res
   -- for debugging:
   --hPutStrLn stderr $ show inputCitations
-  --let bibdata = citeproc procOpts sty refs $ map citationItems inputCitations
   let doc = processCites sty refs $ citationsAsPandoc inputCitations
-  -- let (crenderer, brenderer) = chooseRenderers sty $ chooseOutputFormat backend
-  -- hPutStrLn stderr $ show bibdata
-  -- let citeprocres = CiteprocResult {
-  --                         cites = map crenderer (citations bibdata)
-  --                       , bib   = brenderer (bibliography bibdata)
-  --                       }
-  -- print citeprocres
   putStrLn $ (chooseRenderer . chooseOutputFormat) backend $ doc
 
