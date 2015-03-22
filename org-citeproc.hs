@@ -10,6 +10,7 @@ import qualified Text.Pandoc.Definition as PDD (Inline(Cite))
 import Text.Pandoc.Writers.Markdown
 import Text.Pandoc.Writers.HTML
 import Text.Pandoc.Writers.OpenDocument
+import Text.Pandoc.Writers.Native
 import Text.Pandoc.Options
 --import Text.Pandoc.Generic
 import Data.Set (empty)
@@ -154,13 +155,14 @@ citationsAsPandoc cds = Pandoc nullMeta [citationBlock]
 -- 
 
 -- output format selection
-data OutputFormat = Ascii | Html | OpenDocument -- ...
+data OutputFormat = Ascii | Html | OpenDocument | Native -- ...
 
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
   | s == "ascii" = Ascii
   | s == "html" = Html
   | s == "odt" = OpenDocument
+  | s == "native" = Native
   | otherwise = error $ "Unknown output format: " ++ s
  
        
@@ -169,6 +171,7 @@ chooseRenderer fmt = case fmt of
   Ascii -> renderPandocPlain
   Html -> renderPandocHTML
   OpenDocument -> renderPandocODT
+  Native -> renderPandocNative
         
 -- rendering functions:
 -- plain text:
@@ -202,6 +205,11 @@ renderPandocODT = writeOpenDocument opts
                    -- TODO: , writerReferenceODT                    
                    }
  
+-- Native:
+renderPandocNative :: Pandoc -> String
+renderPandocNative = writeNative opts
+  where opts = def { writerStandalone = False }
+
 --
 -- MAIN
 -- 
