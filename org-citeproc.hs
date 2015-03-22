@@ -110,37 +110,37 @@ instance JSON Cite where
   showJSON = toJSON
   readJSON (JSObject o) = case get_field o "id" of
     Just (JSString citeid) ->
-        Ok $ Cite { citeId = fromJSString citeid
-                  , citePrefix = case get_field o "prefix" of
-                      Just (JSString s) -> [Str $ fromJSString s]
-                      _ -> [] 
-                  , citeSuffix = case get_field o "suffix" of
-                      Just (JSString s) -> [Str $ fromJSString s]
-                      _ -> []
-                  , citeLabel = case get_field o "label" of
-                      Just (JSString x) -> fromJSString x
-                      _ -> ""
-                  , citeLocator = case get_field o "locator" of
-                      Just (JSString x) -> fromJSString x
-                      _ -> ""
-                  , suppressAuthor = case get_field o "suppress-author" of
-                      Just (JSBool True) -> True
-                      _ -> False
-                  , authorInText = case get_field o "author-in-text" of
-                      Just (JSBool True) -> True
-                      _ -> False
-                  , uris = case get_field o "uris" of
-                      Just (JSArray ss) -> us
-                        where us = reverse $ foldl getUris [] ss
-                              getUris acc obj = case readJSON obj of
-                                -- TODO: convert to Links
-                                Ok (JSString s) -> (fromJSString s):acc 
-                                _ -> acc -- TODO: error if non-strings in field?
-                      _ -> []
+        Ok Cite { citeId = fromJSString citeid
+                , citePrefix = case get_field o "prefix" of
+                    Just (JSString s) -> [Str $ fromJSString s]
+                    _ -> [] 
+                , citeSuffix = case get_field o "suffix" of
+                    Just (JSString s) -> [Str $ fromJSString s]
+                    _ -> []
+                , citeLabel = case get_field o "label" of
+                    Just (JSString x) -> fromJSString x
+                    _ -> ""
+                , citeLocator = case get_field o "locator" of
+                    Just (JSString x) -> fromJSString x
+                    _ -> ""
+                , suppressAuthor = case get_field o "suppress-author" of
+                    Just (JSBool True) -> True
+                    _ -> False
+                , authorInText = case get_field o "author-in-text" of
+                    Just (JSBool True) -> True
+                    _ -> False
+                , uris = case get_field o "uris" of
+                    Just (JSArray ss) -> us
+                      where us = reverse $ foldl getUris [] ss
+                            getUris acc obj = case readJSON obj of
+                              -- TODO: convert to Links
+                              Ok (JSString s) -> fromJSString s : acc 
+                              _ -> acc -- TODO: error if non-strings in field?
+                    _ -> []
                       -- TODO: itemData
                       -- See: https://raw.githubusercontent.com/citation-style-language/schema/master/csl-citation.json
                       -- https://raw.githubusercontent.com/citation-style-language/schema/master/csl-data.json
-                      }
+                }
     _ -> Error "Not a citation item"
   readJSON x = fromJSON x
 
@@ -188,18 +188,18 @@ multiCite (ParenMulti cd) = [toPandocCite newCd]
         newItems = case citationItems cd of
           [] -> [] -- edge case: common prefix or suffix, but no items
                    -- (this case is prevented by Org's parser)
-          (first:[]) -> [first { citePrefix = cpfx ++ (citePrefix first)
-                               , citeSuffix = (citeSuffix first) ++ csfx }]
-          (first:xs) -> [first { citePrefix = cpfx ++ (citePrefix first) }] ++
+          [first] -> [first { citePrefix = cpfx ++ citePrefix first
+                            , citeSuffix = citeSuffix first ++ csfx }]
+          (first:xs) -> [first { citePrefix = cpfx ++ citePrefix first }] ++
                         init xs ++
-                        [lst { citeSuffix = (citeSuffix lst) ++ csfx }] 
+                        [lst { citeSuffix = citeSuffix lst ++ csfx }] 
             where lst = last xs
         newCd = cd { citationItems = newItems }
 
 citationsAsPandoc :: [CitationData] -> Pandoc
 citationsAsPandoc cds = Pandoc nullMeta citationBlocks
   where citeSep = Str "////\n" -- TODO: something like "<!--endCite-->"?
-        citeBibSep = Plain $ [Str "====\n"]
+        citeBibSep = Plain [Str "====\n"]
         -- a citation is a `multi-cite' and needs to be handled
         -- specially when it has a common prefix or suffix, or when it
         -- contains only in-text references (and there are 2+).  In
@@ -208,11 +208,10 @@ citationsAsPandoc cds = Pandoc nullMeta citationBlocks
         multiInText cd = atLeastTwo (citationItems cd) &&
                          all authorInText (citationItems cd)
         hasCommons cd = not $ null $ getCPrefix cd ++ getCSuffix cd 
-        getBlocks cd acc = if multiInText cd
-                           then (Plain $ multiCite (InTextMulti cd) ++ [citeSep]):acc
-                           else if hasCommons cd
-                                then (Plain $ multiCite (ParenMulti cd) ++ [citeSep]):acc
-                                else (Plain $ [toPandocCite cd, citeSep]):acc
+        getBlocks cd acc
+          | multiInText cd = (Plain $ multiCite (InTextMulti cd) ++ [citeSep]) : acc
+          | hasCommons cd = (Plain $ multiCite (ParenMulti cd) ++ [citeSep]) : acc
+          | otherwise = Plain [toPandocCite cd, citeSep] : acc
         citationBlocks = foldr getBlocks [citeBibSep] cds
 
 --
@@ -294,5 +293,5 @@ main = do
   -- for debugging:
   --hPutStrLn stderr $ show inputCitations
   let doc = processCites sty refs $ citationsAsPandoc inputCitations
-  putStrLn $ (chooseRenderer . chooseOutputFormat) backend $ doc
+  putStrLn $ (chooseRenderer . chooseOutputFormat) backend doc
 
