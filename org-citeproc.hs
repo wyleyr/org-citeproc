@@ -38,26 +38,54 @@ instance JSON CitationsData where
 -- represents the citeproc-js citation data JSON object 
 data CitationData = CitationData { citationItems :: [Cite]
                                    -- TODO: data structure for properties
-                                 , properties :: [String]
+                                 , properties :: DataProperties
                                  } deriving (Typeable, Data)
   
 instance JSON CitationData where
   showJSON = toJSON  
-  readJSON (JSObject o) = case get_field o "citationItems" of
-    Just (JSArray cs) ->
-      Ok CitationData { citationItems = cis
-                      , properties = [] -- TODO
-                      }
-        where cis = reverse $ foldl getCites [] cs
-              getCites acc obj = case readJSON obj of
-                Ok c@(Cite {}) -> c:acc 
-                _ -> acc -- TODO: error if non-citation in citationItems?
+  readJSON (JSObject o) = case get_field o "citationItems" of 
+    Just (JSArray cs) -> Ok CitationData { citationItems = cis
+                                         , properties = props
+                                         }
+      where getCites acc obj = case readJSON obj of
+              Ok c@(Cite {}) -> c:acc 
+              _ -> acc -- TODO: error if non-citation in citationItems?
+            cis = reverse $ foldl getCites [] cs
+            props = case get_field o "properties" of
+              Just p -> case readJSON p of
+                Ok ps@(DataProperties {}) -> ps
+                _ -> defProps
+              _ -> defProps
+            defProps = DataProperties { noteIndex = 0
+                                      , commonPrefix = []
+                                      , commonSuffix = []
+                                      } 
     _ -> Error "Not a citations data cluster"
   readJSON x = fromJSON x
 
--- JSON reader for pandoc-citeproc's Cite type
--- (this needs to be an orphan instance, since neither Cite nor class JSON is
--- defined here)
+-- represents properties of a citation data JSON object
+data DataProperties = DataProperties { noteIndex :: Int
+                                     -- non-standard properties
+                                     -- supported here for LaTeX-like
+                                     -- multi-cite behavior:
+                                     , commonPrefix :: [Inline]
+                                     , commonSuffix :: [Inline]
+                                     } deriving (Typeable, Data)
+
+instance JSON DataProperties where
+  showJSON = toJSON  
+  readJSON (JSObject o) = Ok DataProperties { noteIndex = n
+                                            , commonPrefix = cpfx
+                                            , commonSuffix = csfx
+                                            }
+    where n = 0  -- TODO 
+          asInlines field = case get_field o field of
+            Just (JSString s) -> [Str $ fromJSString s]
+            _ -> []
+          cpfx = asInlines "common-prefix"
+          csfx = asInlines "common-suffix"
+  readJSON x = fromJSON x
+
 -- represents an individual work in a citation data JSON object
 data Cite = Cite { citeId :: String
                  , citePrefix :: [Inline]
@@ -130,11 +158,13 @@ toMultiCiteGroup :: CitationData -> [Inline]
 toMultiCiteGroup cd = group
   where items = citationItems cd
         props = properties cd 
+        cpfx = commonPrefix props
+        csfx = commonSuffix props
         asCd i = CitationData { citationItems = [i],
                                 properties = props} 
         citas = map (toPandocCite . asCd) items
-        sep = Str ", " -- TODO: should grab separator from CSL
-        group = intersperse sep citas 
+        sep = Str ", " -- TODO: should grab separator from style
+        group = cpfx ++ intersperse sep citas ++ csfx
 
 citationsAsPandoc :: [CitationData] -> Pandoc
 citationsAsPandoc cds = Pandoc nullMeta [citationBlock]
@@ -145,6 +175,11 @@ citationsAsPandoc cds = Pandoc nullMeta [citationBlock]
         atLeastTwo xs = not (null xs) && not (null $ tail xs)
         multiInText cd = atLeastTwo (citationItems cd) &&
                          all authorInText (citationItems cd)
+        -- TODO: in the in-text case, common prefix and suffix go in
+        -- the surrounding text. in the parenthetical case, we should
+        -- prepend the common prefix to the prefix of the first
+        -- citation, and append the common suffix to the suffix of the
+        -- last citation before processing
         getInlines acc cd = if multiInText cd
                             then acc ++ toMultiCiteGroup cd ++ [citeSep]
                             else acc ++ [toPandocCite cd, citeSep]
