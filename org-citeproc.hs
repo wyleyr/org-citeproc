@@ -129,15 +129,11 @@ toMultiCiteGroup :: CitationData -> [Inline]
 toMultiCiteGroup cd = group
   where items = citationItems cd
         props = properties cd 
-        splitCds = map (\i -> CitationData { citationItems = [i],
-                                             properties = props })
-                       items  
-        citas = map toPandocCite splitCds
-        lastCite = last citas
-        butLast = init citas
-        sep = Str ", " -- TODO: configurable separator?
-        lastSep = Str ", and " -- TODO: internationalize
-        group = (intersperse sep butLast) ++ [lastSep, lastCite]
+        asCd i = CitationData { citationItems = [i],
+                                properties = props} 
+        citas = map (toPandocCite . asCd) items
+        sep = Str ", " -- TODO: should grab separator from CSL
+        group = intersperse sep citas 
 
 citationsAsPandoc :: [CitationData] -> Pandoc
 citationsAsPandoc cds = Pandoc nullMeta [citationBlock]
@@ -145,8 +141,8 @@ citationsAsPandoc cds = Pandoc nullMeta [citationBlock]
         citeBibSep = Str "====\n"
         -- behave like LaTeX by splitting up in-text citations with 2+
         -- references:
-        multiInText cd = not (null $ citationItems cd) &&
-                         not (null $ tail $ citationItems cd) &&
+        atLeastTwo xs = not (null xs) && not (null $ tail xs)
+        multiInText cd = atLeastTwo (citationItems cd) &&
                          all authorInText (citationItems cd)
         getInlines acc cd = if multiInText cd
                             then acc ++ toMultiCiteGroup cd ++ [citeSep]
