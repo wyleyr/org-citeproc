@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
-import Text.CSL hiding (Citation)
-import Text.CSL.Style hiding (Citation)
+import Text.CSL hiding (Citation, Cite(..))
+import Text.CSL.Style hiding (Citation, Cite(..))
 import Text.CSL.Pandoc
 import System.Environment
 import Text.JSON
@@ -58,66 +58,101 @@ instance JSON CitationData where
 -- JSON reader for pandoc-citeproc's Cite type
 -- (this needs to be an orphan instance, since neither Cite nor class JSON is
 -- defined here)
+-- represents an individual work in a citation data JSON object
+data Cite = Cite { citeId :: String
+                 , citePrefix :: [Inline]
+                 , citeSuffix :: [Inline]
+                 , citeLabel :: String
+                 , citeLocator :: String
+                 , suppressAuthor :: Bool
+                 , authorInText :: Bool
+                 -- , itemData :: [ItemData] -- TODO
+                 , uris :: [String]
+                 } deriving (Typeable, Data, Show)
+
 instance JSON Cite where
   showJSON = toJSON
   readJSON (JSObject o) = case get_field o "id" of
     Just (JSString citeid) ->
-        Ok $ emptyCite{ citeId = fromJSString citeid
-                      , citePrefix = case get_field o "prefix" of
-                                       Just (JSString x) ->
-                                         Formatted [Str (fromJSString x)]
-                                       _ -> Formatted []
-                      , citeSuffix = case get_field o "suffix" of
-                                       Just (JSString x) ->
-                                         Formatted [Str (fromJSString x)]
-                                       _ -> Formatted []
-                      -- TODO: can pandoc parse label, locator out of the suffix?
-                      -- yes: see toCslCite in Text.CSL.Pandoc in pandoc-citeproc
-                      -- unfortunately, the module doesn't expose this
-                      -- function or the supporting infrastructure;
-                      -- we'd have to turn everything into a Pandoc
-                      -- *before* citation processing, then use processCites
-                      , citeLabel = case get_field o "label" of
-                                       Just (JSString x) -> fromJSString x
-                                       _ -> ""
-                      , citeLocator = case get_field o "locator" of
-                                       Just (JSString x) -> fromJSString x
-                                       _ -> ""
-                      , suppressAuthor = case get_field o "suppress-author" of
-                                       Just (JSBool True) -> True
-                                       _ -> False
-                      , authorInText = case get_field o "author-in-text" of
-                                       Just (JSBool True) -> True
-                                       _ -> False
-                      -- TODO: itemData, uris
+        Ok $ Cite { citeId = fromJSString citeid
+                  , citePrefix = case get_field o "prefix" of
+                      Just (JSString s) -> [Str $ fromJSString s]
+                      _ -> [] 
+                  , citeSuffix = case get_field o "suffix" of
+                      Just (JSString s) -> [Str $ fromJSString s]
+                      _ -> []
+                  , citeLabel = case get_field o "label" of
+                      Just (JSString x) -> fromJSString x
+                      _ -> ""
+                  , citeLocator = case get_field o "locator" of
+                      Just (JSString x) -> fromJSString x
+                      _ -> ""
+                  , suppressAuthor = case get_field o "suppress-author" of
+                      Just (JSBool True) -> True
+                      _ -> False
+                  , authorInText = case get_field o "author-in-text" of
+                      Just (JSBool True) -> True
+                      _ -> False
+                  , uris = case get_field o "uris" of
+                      Just (JSArray ss) -> us
+                        where us = reverse $ foldl getUris [] ss
+                              getUris acc obj = case readJSON obj of
+                                -- TODO: convert to Links
+                                Ok (JSString s) -> (fromJSString s):acc 
+                                _ -> acc -- TODO: error if non-strings in field?
+                      _ -> []
+                      -- TODO: itemData
                       -- See: https://raw.githubusercontent.com/citation-style-language/schema/master/csl-citation.json
                       -- https://raw.githubusercontent.com/citation-style-language/schema/master/csl-data.json
                       }
     _ -> Error "Not a citation item"
   readJSON x = fromJSON x
 
--- transform input into a Pandoc
-citationsAsPandoc :: CitationsData -> Pandoc
-citationsAsPandoc (CitationsData cds) = Pandoc nullMeta [citationBlock]
-  where itemAsCitation i = Citation { citationId = citeId i
-                                    , citationPrefix = case citePrefix i of
-                                        Formatted ss@(s:[]) -> ss
-                                        _ -> []
-                                    , citationSuffix = case citeSuffix i of
-                                        Formatted ss@(s:[]) -> ss
-                                        _ -> []
-                                    , citationMode = if authorInText i 
-                                                     then AuthorInText
-                                                     else if suppressAuthor i
-                                                          then SuppressAuthor
-                                                          else NormalCitation
-                                    , citationNoteNum = 0 -- TODO
-                                    , citationHash = 0 -- TODO
-                                    }
-        citeSep = Str "////\n"
-        asPdCite cd = PDD.Cite (map itemAsCitation (citationItems cd)) [] -- TODO: what is the [Inline] slot for? 
-        citeBibSep = [citeSep, Str "====\n"]
-        inlines = intersperse citeSep (map asPdCite cds) ++ citeBibSep
+-- functions to transform input into a Pandoc
+itemAsCitation :: Cite -> Citation
+itemAsCitation i = Citation { citationId = citeId i
+                            , citationPrefix = citePrefix i
+                            , citationSuffix = citeSuffix i
+                            , citationMode = if authorInText i 
+                                             then AuthorInText
+                                             else if suppressAuthor i
+                                                  then SuppressAuthor
+                                                  else NormalCitation
+                            , citationNoteNum = 0 
+                            , citationHash = 0 
+                            }
+                   
+toPandocCite :: CitationData -> Inline
+toPandocCite cd = PDD.Cite citations []
+  where citations = map itemAsCitation $ citationItems cd
+
+toMultiCiteGroup :: CitationData -> [Inline]
+toMultiCiteGroup cd = group
+  where items = citationItems cd
+        props = properties cd 
+        splitCds = map (\i -> CitationData { citationItems = [i],
+                                             properties = props })
+                       items  
+        citations = map toPandocCite splitCds
+        lastCite = last citations
+        butLast = init citations
+        sep = Str ", " -- TODO: configurable separator?
+        lastSep = Str ", and " -- TODO: internationalize
+        group = (intersperse sep butLast) ++ [lastSep, lastCite]
+
+citationsAsPandoc :: [CitationData] -> Pandoc
+citationsAsPandoc cds = Pandoc nullMeta [citationBlock]
+  where citeSep = Str "////\n" -- TODO: something like "<!--endCite-->"?
+        citeBibSep = Str "====\n"
+        -- behave like LaTeX by splitting up in-text citations with 2+
+        -- references:
+        multiInText cd = not (null $ citationItems cd) &&
+                         not (null $ tail $ citationItems cd) &&
+                         all authorInText (citationItems cd)
+        getInlines acc cd = if multiInText cd
+                            then acc ++ toMultiCiteGroup cd ++ [citeSep]
+                            else acc ++ [toPandocCite cd, citeSep]
+        inlines = foldl getInlines [] cds ++ [citeBibSep]
         citationBlock = Plain inlines
 --
 -- OUTPUT PROCESSING
@@ -228,8 +263,8 @@ main = do
   refs <- concat `fmap` mapM readBiblioFile bibfiles
   res <- decode `fmap` getContents
   -- hPutStrLn stderr $ show res
-  -- let Ok (CitationsData inputCitations) = res
-  let Ok inputCitations = res
+  let Ok (CitationsData inputCitations) = res
+  -- let Ok inputCitations = res
   -- for debugging:
   --hPutStrLn stderr $ show inputCitations
   --let bibdata = citeproc procOpts sty refs $ map citationItems inputCitations
