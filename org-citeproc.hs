@@ -37,7 +37,6 @@ instance JSON CitationsData where
  
 -- represents the citeproc-js citation data JSON object 
 data CitationData = CitationData { citationItems :: [Cite]
-                                   -- TODO: data structure for properties
                                  , properties :: DataProperties
                                  } deriving (Typeable, Data)
   

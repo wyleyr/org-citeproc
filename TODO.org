@@ -11,15 +11,16 @@
 #+TAGS: bug(b) newfeature(f) refactor(r) maybe(m)
 #+SEQ_TODO: TODO INPROGRESS WAITING UPSTREAM | DONE WONTFIX
 
-* INPROGRESS Warning-free compilation				   :refactor:
-  - [ ] remaining warning: Cite's JSON instance is an `orphan'
+* DONE Warning-free compilation					   :refactor:
+  - [X] remaining warning: Cite's JSON instance is an `orphan'
     instance, because neither Cite nor JSON is defined in
     org-citeproc.hs
 * INPROGRESS Correct cabal packaging				   :refactor:
   - [X] rename everything to `org-citeproc'
-* TODO Add support for multi-cite citations			 :newfeature:
-  - [ ] handle common prefix and suffix
-  - [ ] support LaTeX-like behavior, where citation command
+  - [ ] separate code into modules?
+* DONE Add support for multi-cite citations			 :newfeature:
+  - [X] handle common prefix and suffix
+  - [X] support LaTeX-like behavior, where citation command
     distributes over each reference
     (e.g.  [cite: pre1 @Doe1999 post1; pre2 @Doe2000 post2] should
     render like: Doe (pre1 1999, post1), and Doe (pre2 2000, post2)
@@ -36,3 +37,10 @@ processCites in Text.CSL.Pandoc
 
 * TODO Add support for Zotero-style metadata		   :newfeature:maybe:
 Cf. http://article.gmane.org/gmane.emacs.orgmode/96154
+
+* TODO Elisp writer?					   :newfeature:maybe:
+This would be one way of making it easy for users to post-process
+citations (e.g. via a filter) on the Org side.  If we can generate
+Elisp that will be read as Org elements/objects, filters can
+manipulate those objects, rather than worrying about parsing text in
+the target format.
