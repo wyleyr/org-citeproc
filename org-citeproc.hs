@@ -171,8 +171,12 @@ multiCite (InTextMulti cd) = group
   -- common prefix and suffix in the surrounding text
   where items = citationItems cd
         props = properties cd 
-        cpfx = commonPrefix props
-        csfx = commonSuffix props
+        cpfx = case commonPrefix props of
+          [] -> []
+          inls -> inls ++ [Space]
+        csfx = case commonSuffix props of
+          [] -> []
+          inls -> sep : inls
         asCd i = CitationData { citationItems = [i], properties = props } 
         citas = map (toPandocCite . asCd) items
         sep = Str ", " -- TODO: grab separator from style?
@@ -182,8 +186,12 @@ multiCite (ParenMulti cd) = [toPandocCite newCd]
   -- prefix to the prefix of the first item, and append the suffix to
   -- the suffix of the last item (which might be the same), then treat
   -- the resulting CitationData normally, as a single pandoc Citation
-  where cpfx = getCPrefix cd
-        csfx = getCSuffix cd
+  where cpfx = case getCPrefix cd of
+          [] -> []
+          inls -> inls ++ [Space]
+        csfx = case getCSuffix cd of
+          [] -> []
+          inls -> Str ", " : inls
         newItems = case citationItems cd of
           [] -> [] -- edge case: common prefix or suffix, but no items
                    -- (this case is prevented by Org's parser)
