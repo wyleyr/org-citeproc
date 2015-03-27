@@ -18,13 +18,19 @@
 * INPROGRESS Correct cabal packaging				   :refactor:
   - [X] rename everything to `org-citeproc'
   - [ ] separate code into modules?
-* DONE Add support for multi-cite citations			 :newfeature:
+* INPROGRESS Add support for multi-cite citations		 :newfeature:
   - [X] handle common prefix and suffix
   - [X] support LaTeX-like behavior, where citation command
     distributes over each reference
     (e.g.  [cite: pre1 @Doe1999 post1; pre2 @Doe2000 post2] should
     render like: Doe (pre1 1999, post1), and Doe (pre2 2000, post2)
     rather than: Doe (pre1 1999, post1; pre2 Doe 2000 post2)
+  - [X] add spaces after common-prefix and before common-suffix.  Org
+    parser seems to delete these even if they appear in the source,
+    but I can't see how they would be useful unless spaces are added.
+    BibLateX inserts space after common prefix, comma and space
+    before common suffix, in both \parencites and \textcites.
+  - [ ] Internationalization or style-specific separators needed?
 * TODO Add support for linking citations to bib entries		 :newfeature:
 Cf. http://article.gmane.org/gmane.emacs.orgmode/96141
 
