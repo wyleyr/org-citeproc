@@ -44,6 +44,17 @@ processCites in Text.CSL.Pandoc
 * TODO Add support for Zotero-style metadata		   :newfeature:maybe:
 Cf. http://article.gmane.org/gmane.emacs.orgmode/96154
 
+* TODO Fix ODT writer							:bug:
+As things are currently designed, the ODT writer does not place tags
+in the right places.  It:
+  - includes the citation ending marker inside a <text:p>; it should
+    go outside
+  - wraps the separator between citations and bibliography in a
+    <text:p>
+Curiously, the HTML writer does work, so I'm wondering if this is a
+bug on the Pandoc side.  There are two ODT writers in Pandoc; possibly
+the writer I'm using is not up to date.
+
 * TODO Elisp writer?					   :newfeature:maybe:
 This would be one way of making it easy for users to post-process
 citations (e.g. via a filter) on the Org side.  If we can generate
