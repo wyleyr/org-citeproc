@@ -143,6 +143,22 @@ instance JSON Cite where
     _ -> Error "Not a citation item"
   readJSON x = fromJSON x
 
+-- global values needed by several functions
+citeSep :: String
+citeSep = "////\n" -- TODO: prefer something like "<!-- endCite -->"?
+
+citeSepInline :: Inline
+citeSepInline = Str citeSep
+
+citeBibSep :: String
+citeBibSep = "====\n" -- TODO: prefer something like "<!-- startBibliography -->"?
+
+citeBibSepInline :: Inline
+citeBibSepInline = Str citeBibSep
+
+citeBibSepBlock :: Block
+citeBibSepBlock = Plain [citeBibSepInline]
+
 -- functions to transform input into a Pandoc
 itemAsCitation :: Cite -> Citation
 itemAsCitation i = Citation { citationId = citeId i
@@ -205,8 +221,7 @@ multiCite (ParenMulti cd) = [toPandocCite newCd]
 
 citationsAsPandoc :: [CitationData] -> Pandoc
 citationsAsPandoc cds = Pandoc nullMeta citationBlocks
-  where citeSep = Str "////\n" -- TODO: something like "<!--endCite-->"?
-        citeBibSep = Plain [Str "====\n"]
+  where citationBlocks = foldr getBlocks [citeBibSepBlock] cds
         -- a citation is a `multi-cite' and needs to be handled
         -- specially when it has a common prefix or suffix, or when it
         -- contains only in-text references (and there are 2+).  In
@@ -216,10 +231,9 @@ citationsAsPandoc cds = Pandoc nullMeta citationBlocks
                          all authorInText (citationItems cd)
         hasCommons cd = not $ null $ getCPrefix cd ++ getCSuffix cd 
         getBlocks cd acc
-          | multiInText cd = (Plain $ multiCite (InTextMulti cd) ++ [citeSep]) : acc
-          | hasCommons cd = (Plain $ multiCite (ParenMulti cd) ++ [citeSep]) : acc
-          | otherwise = Plain [toPandocCite cd, citeSep] : acc
-        citationBlocks = foldr getBlocks [citeBibSep] cds
+          | multiInText cd = (Plain $ multiCite (InTextMulti cd) ++ [citeSepInline]) : acc
+          | hasCommons cd = (Plain $ multiCite (ParenMulti cd) ++ [citeSepInline]) : acc
+          | otherwise = Plain [toPandocCite cd, citeSepInline] : acc
 
 --
 -- OUTPUT PROCESSING
@@ -278,20 +292,21 @@ renderPandocODT (Pandoc _ blocks) = concatMap renderBlock blocks
 -- but rather identifiable fragments that can be inserted into an ODT
 -- document by Org; so here we take care to insert the separators
 -- *outside* the ODT XML tags.
-  where citeSep = "////\n"
-        citeBibSep = "====\n"
-        asDoc inlines = Pandoc nullMeta [Plain inlines]
+  where asDoc inlines = Pandoc nullMeta [Plain inlines]
         transform i acc = case i of
           (PDD.Cite _ inls) -> inls ++ acc 
-          (Str "////\n") -> acc -- remove separators inserted earlier
+          (Str s) -> if s == citeSep 
+                     then acc -- remove cite separators inserted earlier
+                     else i : acc
           _ -> i : acc
         renderInlines inlines = writeOpenDocument opts $ asDoc $
                                   foldr transform [] inlines
         renderBlock b = case b of
           (Div ("", ["references"], []) _) ->
             citeBibSep ++ writeOpenDocument opts (Pandoc nullMeta [b])
-          (Plain [Str "====\n"]) -> "" -- remove separator inserted earlier
-          (Plain inls) -> renderInlines inls ++ citeSep
+          (Plain inls) -> if inls == [citeBibSepInline]
+                          then "" -- remove bib separator inserted earlier
+                          else renderInlines inls ++ citeSep
           _ -> ""
         opts = def { writerStandalone = False
                    , writerTableOfContents = False
