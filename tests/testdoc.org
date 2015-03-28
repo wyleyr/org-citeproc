@@ -1,0 +1,87 @@
+#+OPTIONS: ':nil *:t -:t ::t <:t H:3 \n:nil ^:t arch:nil author:t
+#+OPTIONS: c:nil creator:comment d:(not "LOGBOOK") date:t e:t
+#+OPTIONS: email:nil f:t inline:t num:t p:nil pri:nil prop:nil stat:t
+#+OPTIONS: tags:t tasks:t tex:t timestamp:t title:t toc:t todo:t |:t
+#+TITLE: Org-Citeproc tests
+#+DESCRIPTION: 
+#+KEYWORDS:
+#+LANGUAGE: en
+#+SELECT_TAGS: export
+#+EXCLUDE_TAGS: noexport
+#+CREATOR: Emacs 23.4.1 (Org mode 8.3beta)
+#+CSL_FILE: chicago-author-date.csl
+#+BIBDB: bibtex testdoc.bib
+
+* Org markup
+** Simple citations
+*** Parenthetical 
+Some great ideas occur in books [@Brandom1994]. Others in articles
+[@Hofweber2007]. Still others are in collections of previously
+published work [@Russell1919], or in conference proceedings
+[@Rogers1996]; sometimes they are the proceedings themselves
+[@RogersKepser2007].  Sometimes, a great idea can be found in a
+dissertation [@Caponigro2003], and sometimes on just a handout
+[@Ross1985].  Some remain forever unpublished [@Faraci1970].
+
+*** In-text 
+Some great ideas occur in books, such as @Brandom1994. Others in
+articles, such as @Hofweber2007. Still others are in collections of
+previously published work, such as @Russell1919, or in conference
+proceedings like @Rogers1996; sometimes they are the proceedings
+themselves such as @RogersKepser2007.  Sometimes, a great idea can be
+found in a dissertation, such as @Caponigro2003, and sometimes on just
+a handout like @Ross1985.  Some remain forever unpublished, such as
+@Faraci1970.
+
+*** With prefix and suffix data
+Some great ideas occur in books [(cite): see @Brandom1994 chapter 7]. 
+Others in articles [(cite): @Hofweber2007 section 1]. Still others
+are in collections of previously published work, such as 
+[cite: @Russell1919 cf. section 3], or in conference proceedings 
+[(cite): e.g., @Rogers1996].  Sometimes, a great idea can be found in a
+dissertation, like an idea by [cite: see @Caponigro2003 chapter 1],
+and sometimes on just a handout, like others by [cite: e.g., @Ross1985].
+
+*** Citations to works with tricky field data
+In some cases, the authors have names which are tricky to represent in
+BibTeX, like @BelnapSteel1976, or @Vaanaanen2011.
+@denDikkenMeinungerWilder2000 has a lead author that should probably
+be capitalized in sentence-initial position. Sometimes, it's the
+journal name which is difficult [@Belnap1970].
+
+** Multi-cite citations
+*** Parenthetical, keys only
+Some great ideas occur in books, articles, or collections
+[(cite): @Brandom1994; @Hofweber2007; @Russell1919].  
+
+Some occur in conference proceedings or dissertations
+[(cite): @Rogers1996; @RogersKepser2007; @Caponigro2003], and 
+sometimes remain unpublished [(cite): @Ross1985; @Faraci1970].
+
+*** Parenthetical, with prefix and suffix data for individual works
+Some great ideas occur in books, articles, or collections
+[(cite): see @Brandom1994 chapter 7; also @Hofweber2007; @Russell1919 is the locus classicus].  
+Some occur in conference proceedings or dissertations
+[(cite): @Rogers1996; for an overview, see @RogersKepser2007 and references therein].
+
+*** Parenthetical, with common prefix and suffix data
+Some great ideas occur in books, articles, or collections
+[(cite): For more on this topic, see ; @Brandom1994; @Hofweber2007; @Russell1919; and references therein].  
+
+*** All in-text, keys only
+Some great ideas occur in books, articles, or collections
+such as [cite: @Brandom1994; @Hofweber2007; @Russell1919].  
+
+Some occur in conference proceedings or dissertations like
+[cite: @Rogers1996; @RogersKepser2007; @Caponigro2003], and 
+sometimes remain unpublished, like [cite: @Ross1985; @Faraci1970].
+
+*** All in-text, with common prefix and suffix
+Some great ideas occur in books, articles, or collections.
+[cite: See: ; @Brandom1994; @Hofweber2007; @Russell1919; and references therein.]  
+
+Some occur in conference proceedings or dissertations. 
+[cite: For more on this topic, see ; @Rogers1996; @RogersKepser2007; @Caponigro2003].
+
+* References
+#+BIBLIOGRAPHY: here
