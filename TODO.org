@@ -30,7 +30,16 @@
     but I can't see how they would be useful unless spaces are added.
     BibLateX inserts space after common prefix, comma and space
     before common suffix, in both \parencites and \textcites.
-  - [ ] Internationalization or style-specific separators needed?
+  - [ ] Internationalization or style-specific separators needed?  One
+    case that definitely needs to be dealt with: with parenthetical
+    multi-cites and chicago-author-date.csl, the common suffix should
+    probably be separated by a semi-colon, rather than a comma, to be
+    consistent with the separators between works.  This suggests we
+    should pull the separator from the style if possible.
+* TODO Locators and abbreviations			     :bug:newfeature:
+  - [ ] Figure out why processCites does not seem to be parsing
+    locators out of the suffix, or why it is not abbreviating them in
+    the tests I've run so far.
 * TODO Add support for linking citations to bib entries		 :newfeature:
 Cf. http://article.gmane.org/gmane.emacs.orgmode/96141
 
