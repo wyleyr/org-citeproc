@@ -226,14 +226,15 @@ citationsAsPandoc cds = Pandoc nullMeta citationBlocks
 -- 
 
 -- output format selection
-data OutputFormat = Ascii | Html | OpenDocument | Native -- ...
+data OutputFormat = Ascii | Html | OpenDocument | NativeBefore | NativeAfter -- ...
 
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
   | s == "ascii" = Ascii
   | s == "html" = Html
   | s == "odt" = OpenDocument
-  | s == "native" = Native
+  | s == "native-before" = NativeBefore
+  | s == "native" = NativeAfter
   | otherwise = error $ "Unknown output format: " ++ s
  
        
@@ -242,7 +243,8 @@ chooseRenderer fmt = case fmt of
   Ascii -> renderPandocPlain
   Html -> renderPandocHTML
   OpenDocument -> renderPandocODT
-  Native -> renderPandocNative
+  NativeBefore -> renderPandocNativeBefore
+  NativeAfter -> renderPandocNative
         
 -- rendering functions:
 -- plain text:
@@ -277,9 +279,17 @@ renderPandocODT = writeOpenDocument opts
                    }
  
 -- Native:
+renderPandocNativeBefore :: Pandoc -> String
+renderPandocNativeBefore = writeNative opts
+  where opts = def { writerStandalone = False }
+
 renderPandocNative :: Pandoc -> String
 renderPandocNative = writeNative opts
-  where opts = def { writerStandalone = False }
+  where opts = def { writerStandalone = False
+                   , writerTableOfContents = False
+                   , writerCiteMethod = Citeproc
+                   }
+
 
 --
 -- MAIN
