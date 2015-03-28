@@ -44,7 +44,7 @@ processCites in Text.CSL.Pandoc
 * TODO Add support for Zotero-style metadata		   :newfeature:maybe:
 Cf. http://article.gmane.org/gmane.emacs.orgmode/96154
 
-* TODO Fix ODT writer							:bug:
+* DONE Fix ODT writer							:bug:
 As things are currently designed, the ODT writer does not place tags
 in the right places.  It:
   - includes the citation ending marker inside a <text:p>; it should
