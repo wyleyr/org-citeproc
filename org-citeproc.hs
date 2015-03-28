@@ -270,12 +270,33 @@ renderPandocHTML = writeHtmlString opts
 
 -- ODT: 
 renderPandocODT :: Pandoc -> String        
-renderPandocODT = writeOpenDocument opts
-  where opts = def { writerStandalone = False
+renderPandocODT (Pandoc _ blocks) = concatMap renderBlock blocks
+-- special case: we can't just use Pandoc's ODT writer directly here,
+-- because it wraps Plain blocks in <text:p> tags.  This breaks our
+-- extraction mechanism for individual citations and the bibliography
+-- on the Org side.  We don't want to produce a complete ODT document,
+-- but rather identifiable fragments that can be inserted into an ODT
+-- document by Org; so here we take care to insert the separators
+-- *outside* the ODT XML tags.
+  where citeSep = "////\n"
+        citeBibSep = "====\n"
+        asDoc inlines = Pandoc nullMeta [Plain inlines]
+        transform i acc = case i of
+          (PDD.Cite _ inls) -> inls ++ acc 
+          (Str "////\n") -> acc -- remove separators inserted earlier
+          _ -> i : acc
+        renderInlines inlines = writeOpenDocument opts $ asDoc $
+                                  foldr transform [] inlines
+        renderBlock b = case b of
+          (Div ("", ["references"], []) _) ->
+            citeBibSep ++ writeOpenDocument opts (Pandoc nullMeta [b])
+          (Plain [Str "====\n"]) -> "" -- remove separator inserted earlier
+          (Plain inls) -> renderInlines inls ++ citeSep
+          _ -> ""
+        opts = def { writerStandalone = False
                    , writerTableOfContents = False
                    , writerCiteMethod = Citeproc
                    , writerWrapText = False
-                   -- TODO: , writerReferenceODT                    
                    }
  
 -- Native:
