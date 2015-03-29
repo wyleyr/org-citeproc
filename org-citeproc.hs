@@ -16,6 +16,7 @@ import Text.Pandoc.Options
 import Data.Set (empty)
 import Data.List (intersperse)
 import Control.Monad (unless)
+import Control.Applicative ((<$>))
 import System.Exit
 import System.IO
 
@@ -339,8 +340,8 @@ main = do
     exitWith (ExitFailure 1)
   let (backend : cslfile : bibfiles) = args
   sty <- readCSLFile Nothing cslfile
-  refs <- concat `fmap` mapM readBiblioFile bibfiles
-  res <- decode `fmap` getContents
+  refs <- concat <$> mapM readBiblioFile bibfiles
+  res <- decode <$> getContents
   -- hPutStrLn stderr $ show res
   let Ok (CitationsData inputCitations) = res
   -- for debugging:
