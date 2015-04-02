@@ -10,6 +10,7 @@ import qualified Text.Pandoc.Definition as PDD (Inline(Cite))
 import Text.Pandoc.Writers.Markdown
 import Text.Pandoc.Writers.HTML
 import Text.Pandoc.Writers.OpenDocument
+import Text.Pandoc.Writers.Org
 import Text.Pandoc.Writers.Native
 import Text.Pandoc.Options
 --import Text.Pandoc.Generic
@@ -241,13 +242,19 @@ citationsAsPandoc cds = Pandoc nullMeta citationBlocks
 -- 
 
 -- output format selection
-data OutputFormat = Ascii | Html | OpenDocument | NativeBefore | NativeAfter -- ...
+data OutputFormat = Ascii
+                  | Html
+                  | OpenDocument
+                  | Org
+                  | NativeBefore
+                  | NativeAfter
 
 chooseOutputFormat :: String -> OutputFormat
 chooseOutputFormat s
   | s == "ascii" = Ascii
   | s == "html" = Html
   | s == "odt" = OpenDocument
+  | s == "org" = Org
   | s == "native-before" = NativeBefore
   | s == "native" = NativeAfter
   | otherwise = error $ "Unknown output format: " ++ s
@@ -258,6 +265,7 @@ chooseRenderer fmt = case fmt of
   Ascii -> renderPandocPlain
   Html -> renderPandocHTML
   OpenDocument -> renderPandocODT
+  Org -> renderPandocOrg
   NativeBefore -> renderPandocNativeBefore
   NativeAfter -> renderPandocNative
         
@@ -315,6 +323,26 @@ renderPandocODT (Pandoc _ blocks) = concatMap renderBlock blocks
                    , writerWrapText = False
                    }
  
+-- Org:
+renderPandocOrg :: Pandoc -> String
+renderPandocOrg (Pandoc m blocks) = writeOrg opts cleanDoc
+  where opts = def { writerStandalone = False
+                   , writerTableOfContents = False
+                   , writerCiteMethod = Citeproc
+                   , writerSectionDivs = False
+                   , writerWrapText = False
+                   }
+        -- the Org writer converts divs weirdly, wrapping them in
+        -- BEGIN_HTML/END_HTML blocks...avoid this by extracting the
+        -- list of bibliography blocks from a Div block
+        -- TODO: add "* References" headline as a first block in that list?
+        -- for now, I assume this will be done on the Org side
+        cleanDoc = Pandoc m (foldr unwrapRefsBlock [] blocks)
+        unwrapRefsBlock b acc = case b of
+          (Div ("", ["references"], []) blks) -> blks ++ acc
+          _ -> b : acc
+        
+
 -- Native:
 renderPandocNativeBefore :: Pandoc -> String
 renderPandocNativeBefore = writeNative opts
