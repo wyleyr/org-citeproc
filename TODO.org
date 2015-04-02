@@ -65,6 +65,18 @@ for more on what a <text:p> can validly contain.
 
 Maybe instead a citation should be wrapped in a <text:reference-mark>?
 or <text:note><text:note-citation>...?
+
+Also, the bibliography should be formatted as a <text:bibliography>.
+
+** TODO Look into supporting this upstream in Pandoc
+   
+* TODO Add support for note-based styles				:bug:
+Currently, I get a crash when exporting the test document using a
+note-based style (namely chicago-fullnote-bibliography-no-ibid.csl);
+and even if it didn't crash, need to add support on the Org side for
+placing the processed output into a footnote definition and replacing
+the citation with a footnote reference.
+
 * TODO Elisp writer?					   :newfeature:maybe:
 This would be one way of making it easy for users to post-process
 citations (e.g. via a filter) on the Org side.  If we can generate
