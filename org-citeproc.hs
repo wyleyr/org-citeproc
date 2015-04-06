@@ -335,11 +335,10 @@ renderPandocOrg (Pandoc m blocks) = writeOrg opts cleanDoc
         -- the Org writer converts divs weirdly, wrapping them in
         -- BEGIN_HTML/END_HTML blocks...avoid this by extracting the
         -- list of bibliography blocks from a Div block
-        -- TODO: add "* References" headline as a first block in that list?
-        -- for now, I assume this will be done on the Org side
         cleanDoc = Pandoc m (foldr unwrapRefsBlock [] blocks)
+        headline = Plain [Str "* References\n"]
         unwrapRefsBlock b acc = case b of
-          (Div ("", ["references"], []) blks) -> blks ++ acc
+          (Div ("", ["references"], []) blks) -> (headline : blks) ++ acc
           _ -> b : acc
         
 
