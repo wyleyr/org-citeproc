@@ -77,6 +77,24 @@ and even if it didn't crash, need to add support on the Org side for
 placing the processed output into a footnote definition and replacing
 the citation with a footnote reference.
 
+* INPROGRESS Org writer
+  - [X] basic implementation
+  - [ ] detect when style is a note style; output footnote definitions correctly
+    1) Notice when processCites turns a Cite into a Note
+    2) Output an Org footnote definition with a unique label, perhaps based on
+       the cite key(s), to allow inserting these into the document
+       tree on the Org side
+    3) Use a different delimiter for textual/Harvard vs. note-style citations.
+
+On the Org side, we need to:
+  1) Parse the Org output from org-citeproc
+  2) Replace textual citations with formatted text 
+  3) Replace note-style citations with a footnote reference, and
+     insert the definition provided by org-citeproc somewhere into the
+     parsed Org tree.
+  4) Insert the bibliography as a headline/section at the end of the
+     parsed Org tree.
+ 
 * TODO Elisp writer?					   :newfeature:maybe:
 This would be one way of making it easy for users to post-process
 citations (e.g. via a filter) on the Org side.  If we can generate
